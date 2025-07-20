@@ -26,37 +26,24 @@ export function Header({ user }: HeaderProps) {
           
           <nav className="hidden md:flex items-center gap-6">
             <Link 
-              href="/blog" 
+              href="/posts" 
               className={cn(
                 "text-sm font-medium transition-colors hover:text-primary",
-                pathname.startsWith('/blog') && "text-primary"
+                pathname.startsWith('/posts') && "text-primary"
               )}
             >
-              블로그
+              게시글
             </Link>
             
-            {user && (
-              <>
-                <Link 
-                  href="/teams" 
-                  className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary",
-                    pathname.startsWith('/teams') && "text-primary"
-                  )}
-                >
-                  팀
-                </Link>
-                <Link 
-                  href="/tasks" 
-                  className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary",
-                    pathname.startsWith('/tasks') && "text-primary"
-                  )}
-                >
-                  태스크
-                </Link>
-              </>
-            )}
+            <Link 
+              href="/communities" 
+              className={cn(
+                "text-sm font-medium transition-colors hover:text-primary",
+                pathname.startsWith('/communities') && "text-primary"
+              )}
+            >
+              커뮤니티
+            </Link>
             
             {user?.role === 'admin' && (
               <Link 

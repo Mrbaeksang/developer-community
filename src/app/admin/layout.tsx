@@ -22,8 +22,8 @@ const sidebarItems = [
     icon: BarChart3
   },
   {
-    title: '블로그 관리',
-    href: '/admin/blog/posts',
+    title: '게시글 승인',
+    href: '/admin/posts/pending',
     icon: FileText
   },
   {
@@ -32,14 +32,14 @@ const sidebarItems = [
     icon: Users
   },
   {
-    title: '팀 로테이션',
-    href: '/admin/teams/rotations',
-    icon: RotateCw
+    title: '커뮤니티 관리',
+    href: '/admin/communities',
+    icon: Users
   },
   {
-    title: '댓글 관리',
-    href: '/admin/comments',
-    icon: MessageSquare
+    title: '카테고리 관리',
+    href: '/admin/categories',
+    icon: RotateCw
   },
   {
     title: '설정',

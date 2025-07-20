@@ -43,7 +43,7 @@ NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn
 
 ## 📋 구현 체크리스트
 
-### Phase 1: 기초 설정 (1-2주차) ✅ 진행 중
+### Phase 1: 기초 설정 (1-2주차) ✅ UI 완료
 
 #### Day 1-2: 프로젝트 구조 설정 ✅ 완료
 ```bash
@@ -55,11 +55,11 @@ mkdir -p src/lib/{supabase,utils,constants}
 ```
 
 **작업 목록:**
-- [x] `src/lib/supabase/client.ts` 생성
-- [x] `src/lib/supabase/server.ts` 생성  
-- [x] `src/lib/supabase/middleware.ts` 생성
-- [x] `src/lib/utils/cn.ts` 생성 (클래스 유틸)
-- [x] `src/lib/constants/routes.ts` 생성
+- [x] `src/lib/supabase/client.ts` 생성 ✅
+- [x] `src/lib/supabase/server.ts` 생성 ✅  
+- [x] `src/lib/supabase/middleware.ts` 생성 ✅
+- [x] `src/lib/utils/cn.ts` 생성 (클래스 유틸) ✅
+- [x] `src/lib/constants/routes.ts` 생성 ✅
 
 #### Day 3-4: Supabase 설정
 ```sql
@@ -86,8 +86,8 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [x] 로그인 페이지 생성 ✅
-- [x] 회원가입 페이지 생성 ✅
+- [x] 로그인 페이지 생성 ✅ `src/app/auth/login/page.tsx` → http://localhost:3000/auth/login
+- [x] 회원가입 페이지 생성 ✅ `src/app/auth/signup/page.tsx` → http://localhost:3000/auth/signup
 - [ ] 미들웨어 보호 구현
 - [ ] 사용자 프로필 컴포넌트
 
@@ -100,10 +100,10 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [x] 관리자 레이아웃 생성 ✅
-- [x] 포스트 작성 폼 (마크다운 에디터) ✅
-- [x] 포스트 목록 (테이블) ✅
-- [ ] 포스트 수정/삭제 기능
+- [x] 관리자 레이아웃 생성 ✅ `src/app/admin/layout.tsx` → http://localhost:3000/admin
+- [x] 포스트 작성 폼 (마크다운 에디터) ✅ `src/app/admin/blog/posts/new/page.tsx` → http://localhost:3000/admin/blog/posts/new
+- [x] 포스트 목록 (테이블) ✅ `src/app/admin/blog/posts/page.tsx` → http://localhost:3000/admin/blog/posts
+- [x] 포스트 수정/삭제 기능 ✅ `src/app/admin/blog/posts/[id]/edit/page.tsx` → http://localhost:3000/admin/blog/posts/1/edit
 
 #### Day 11-14: 공개 블로그
 ```typescript
@@ -112,10 +112,10 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [x] 블로그 목록 페이지 (카드 레이아웃) ✅
-- [x] 블로그 상세 페이지 ✅
-- [ ] 카테고리 필터링
-- [x] 댓글 시스템 구현 (UI만) ✅
+- [x] 블로그 목록 페이지 (카드 레이아웃) ✅ `src/app/(public)/blog/page.tsx` → http://localhost:3000/blog
+- [x] 블로그 상세 페이지 ✅ `src/app/(public)/blog/[id]/page.tsx` → http://localhost:3000/blog/1
+- [x] 카테고리 필터링 ✅ `src/app/(public)/blog/category/[category]/page.tsx` → http://localhost:3000/blog/category/tech
+- [x] 댓글 시스템 구현 (UI만) ✅ `src/app/(public)/blog/[id]/page.tsx` (lines 184-228)
 
 ### Phase 3: 팀 시스템 (5-6주차)
 
@@ -126,10 +126,10 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [ ] 로테이션 생성 UI
-- [ ] 팀 자동 배정 로직
-- [ ] 수동 팀 조정 기능
-- [ ] 팀 히스토리 뷰
+- [x] 로테이션 생성 UI ✅ `src/app/admin/teams/rotations/page.tsx` → http://localhost:3000/admin/teams/rotations
+- [x] 팀 자동 배정 로직 (UI) ✅
+- [x] 수동 팀 조정 기능 (UI) ✅
+- [x] 팀 히스토리 뷰 ✅
 
 #### Day 18-21: 팀 대시보드
 ```typescript
@@ -138,8 +138,10 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [x] 현재 팀 정보 표시 ✅
-- [x] 팀 멤버 목록 ✅
+- [x] 현재 팀 정보 표시 ✅ `src/app/(authenticated)/teams/page.tsx` → http://localhost:3000/teams
+- [x] 팀 멤버 목록 ✅ `src/app/(authenticated)/teams/page.tsx` (lines 72-126)
+- [x] 팀 홈 페이지 ✅ `src/app/(authenticated)/teams/[id]/page.tsx` → http://localhost:3000/teams/1
+- [x] 팀별 태스크 페이지 ✅ `src/app/(authenticated)/teams/[id]/tasks/page.tsx` → http://localhost:3000/teams/1/tasks
 - [ ] 팀 전환 애니메이션
 - [ ] 팀별 접근 권한 테스트
 
@@ -164,10 +166,11 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [ ] 메모 CRUD
-- [ ] 메모 고정 기능
-- [ ] 파일 첨부
-- [ ] 검색 기능
+- [x] 메모 목록 UI ✅ `src/app/(authenticated)/teams/[id]/memos/page.tsx` → http://localhost:3000/teams/1/memos
+- [x] 메모 고정 UI ✅
+- [x] 검색/필터 UI ✅
+- [ ] 메모 CRUD API 연결
+- [ ] 파일 첨부 기능
 
 ### Phase 5: 태스크 관리 (9-10주차)
 
@@ -178,10 +181,10 @@ export function useAuth() {
 ```
 
 **작업 목록:**
-- [x] 보드 레이아웃 ✅
-- [x] 드래그 앤 드롭 구현 ✅
-- [x] 컬럼 관리 (4단계: 할 일/진행 중/검토/완료) ✅
-- [x] 태스크 카드 디자인 ✅
+- [x] 보드 레이아웃 ✅ `src/app/(authenticated)/tasks/page.tsx` → http://localhost:3000/tasks
+- [x] 드래그 앤 드롭 구현 ✅ `src/features/tasks/components/TaskBoard.tsx` (lines 59-91)
+- [x] 컬럼 관리 (4단계: 할 일/진행 중/검토/완료) ✅ `src/features/tasks/components/Column.tsx`
+- [x] 태스크 카드 디자인 ✅ `src/features/tasks/components/TaskCard.tsx`
 
 #### Day 33-35: 태스크 기능
 ```typescript
@@ -393,10 +396,10 @@ WHERE auth.uid() IS NOT NULL;
 
 ## 🎯 주간 목표
 
-### Week 1-2: 기초
-- 인증 시스템 완성
-- 기본 레이아웃 구성
-- 데이터베이스 연결
+### Week 1-2: 기초 ✅ UI 완료
+- 기본 레이아웃 구성 ✅
+- UI 컴포넌트 구현 ✅
+- 페이지 라우팅 설정 ✅
 
 ### Week 3-4: 블로그
 - 관리자 대시보드
