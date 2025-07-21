@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,24 +23,37 @@ import {
   Save,
   Send,
   X,
-  Plus
+  Plus,
+  Loader2
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
 
-const categories = [
-  { id: 'project', name: '프로젝트', slug: 'project', color: '#3B82F6' },
-  { id: 'tech', name: '기술', slug: 'tech', color: '#10B981' },
-  { id: 'news', name: '뉴스', slug: 'news', color: '#F59E0B' },
-  { id: 'qna', name: '질문', slug: 'qna', color: '#EF4444' },
-  { id: 'tutorial', name: '튜토리얼', slug: 'tutorial', color: '#8B5CF6' },
-  { id: 'career', name: '취업', slug: 'career', color: '#EC4899' },
-  { id: 'general', name: '일반', slug: 'general', color: '#6B7280' }
-]
+// 타입 정의
+interface Category {
+  id: string
+  name: string
+  slug: string
+  color: string
+}
+
+interface User {
+  id: string
+  username: string
+  avatar_url: string | null
+  bio?: string
+}
 
 export default function WritePostPage() {
   const router = useRouter()
   const [isPreview, setIsPreview] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     title: '',
@@ -49,18 +62,105 @@ export default function WritePostPage() {
     content: '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 인증 및 카테고리 데이터 로드
+  useEffect(() => {
+    const initializePage = async () => {
+      const supabase = createClient()
+      
+      try {
+        // 현재 사용자 확인
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) {
+          router.push('/auth/login')
+          return
+        }
+
+        // 사용자 프로필 가져오기
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, username, avatar_url, bio')
+          .eq('id', session.user.id)
+          .single()
+        
+        setCurrentUser(profile)
+
+        // 카테고리 데이터 로드
+        const response = await fetch('/api/categories')
+        if (!response.ok) throw new Error('카테고리를 불러오는데 실패했습니다')
+        const categoriesData = await response.json()
+        setCategories(categoriesData)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '페이지를 불러오는데 실패했습니다')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializePage()
+  }, [router])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: 게시글 제출 로직
-    console.log('게시글 제출:', { ...formData, tags })
-    alert('게시글이 제출되었습니다. 관리자 승인 후 게시됩니다.')
-    router.push('/posts')
+    if (!formData.title.trim() || !formData.content.trim() || !formData.category_id) {
+      alert('제목, 내용, 카테고리는 필수 입력 항목입니다.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          tags,
+          status: 'pending' // 관리자 승인 대기 상태
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '게시글 제출에 실패했습니다')
+      }
+
+      alert('게시글이 제출되었습니다. 관리자 승인 후 게시됩니다.')
+      router.push('/posts')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '게시글 제출에 실패했습니다')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleSaveDraft = () => {
-    // TODO: 임시저장 로직
-    console.log('임시저장:', { ...formData, tags })
-    alert('임시저장되었습니다.')
+  const handleSaveDraft = async () => {
+    if (!formData.title.trim() && !formData.content.trim()) {
+      alert('제목이나 내용을 입력해주세요.')
+      return
+    }
+
+    setSavingDraft(true)
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          tags,
+          status: 'draft' // 임시저장 상태
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '임시저장에 실패했습니다')
+      }
+
+      alert('임시저장되었습니다.')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '임시저장에 실패했습니다')
+    } finally {
+      setSavingDraft(false)
+    }
   }
 
   const addTag = () => {
@@ -75,6 +175,37 @@ export default function WritePostPage() {
   }
 
   const selectedCategory = categories.find(cat => cat.id === formData.category_id)
+
+  // 로딩 상태
+  if (loading) {
+    return (
+      <div className="container max-w-5xl py-8">
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">페이지를 불러오는 중...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <div className="container max-w-5xl py-8">
+        <div className="text-center py-16">
+          <p className="text-red-500 mb-4">{error}</p>
+          <div className="space-x-2">
+            <Button onClick={() => window.location.reload()}>
+              다시 시도
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/posts">게시글 목록으로</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-5xl py-8">
@@ -262,18 +393,27 @@ export default function WritePostPage() {
             {/* 액션 버튼 */}
             <Card>
               <CardContent className="pt-6 space-y-3">
-                <Button type="submit" className="w-full">
-                  <Send className="mr-2 h-4 w-4" />
-                  게시글 제출
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {submitting ? '제출 중...' : '게시글 제출'}
                 </Button>
                 <Button 
                   type="button" 
                   variant="outline" 
                   className="w-full"
                   onClick={handleSaveDraft}
+                  disabled={savingDraft}
                 >
-                  <Save className="mr-2 h-4 w-4" />
-                  임시저장
+                  {savingDraft ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  {savingDraft ? '저장 중...' : '임시저장'}
                 </Button>
               </CardContent>
             </Card>

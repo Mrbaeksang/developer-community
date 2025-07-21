@@ -1,29 +1,38 @@
 -- Enable RLS on all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_rotations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_memos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE task_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE communities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_join_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_memos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_logs ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
-CREATE POLICY "Public profiles are viewable by everyone" ON profiles
-  FOR SELECT USING (true);
+CREATE POLICY "Public profiles are viewable by everyone"
+  ON profiles FOR SELECT
+  USING (true);
 
-CREATE POLICY "Users can update own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
 
--- Blog categories policies
-CREATE POLICY "Blog categories are viewable by everyone" ON blog_categories
-  FOR SELECT USING (true);
+CREATE POLICY "Users can insert own profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Only admins can manage categories" ON blog_categories
-  FOR ALL USING (
+-- Post categories policies (public read)
+CREATE POLICY "Post categories are viewable by everyone"
+  ON post_categories FOR SELECT
+  USING (true);
+
+CREATE POLICY "Only admins can manage categories"
+  ON post_categories FOR ALL
+  USING (
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
@@ -31,13 +40,22 @@ CREATE POLICY "Only admins can manage categories" ON blog_categories
     )
   );
 
--- Blog posts policies
-CREATE POLICY "Published posts are viewable by everyone" ON blog_posts
-  FOR SELECT USING (status = 'published' OR author_id = auth.uid());
+-- Posts policies
+CREATE POLICY "Approved posts are viewable by everyone"
+  ON posts FOR SELECT
+  USING (status = 'approved' OR author_id = auth.uid());
 
-CREATE POLICY "Authors can create posts" ON blog_posts
-  FOR INSERT WITH CHECK (
-    auth.uid() = author_id AND
+CREATE POLICY "Users can create own posts"
+  ON posts FOR INSERT
+  WITH CHECK (auth.uid() = author_id);
+
+CREATE POLICY "Users can update own posts"
+  ON posts FOR UPDATE
+  USING (auth.uid() = author_id);
+
+CREATE POLICY "Admins can manage all posts"
+  ON posts FOR ALL
+  USING (
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
@@ -45,31 +63,188 @@ CREATE POLICY "Authors can create posts" ON blog_posts
     )
   );
 
-CREATE POLICY "Authors can update own posts" ON blog_posts
-  FOR UPDATE USING (auth.uid() = author_id);
+-- Post comments policies
+CREATE POLICY "Comments on approved posts are viewable"
+  ON post_comments FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM posts
+      WHERE posts.id = post_comments.post_id
+      AND posts.status = 'approved'
+    )
+  );
 
-CREATE POLICY "Authors can delete own posts" ON blog_posts
-  FOR DELETE USING (auth.uid() = author_id);
+CREATE POLICY "Authenticated users can create comments"
+  ON post_comments FOR INSERT
+  WITH CHECK (auth.uid() = author_id);
 
--- Blog comments policies
-CREATE POLICY "Comments are viewable by everyone" ON blog_comments
-  FOR SELECT USING (true);
+CREATE POLICY "Users can update own comments"
+  ON post_comments FOR UPDATE
+  USING (auth.uid() = author_id);
 
-CREATE POLICY "Authenticated users can create comments" ON blog_comments
-  FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "Users can delete own comments"
+  ON post_comments FOR DELETE
+  USING (auth.uid() = author_id);
 
-CREATE POLICY "Users can update own comments" ON blog_comments
-  FOR UPDATE USING (auth.uid() = author_id);
+-- Post likes policies
+CREATE POLICY "Post likes are viewable"
+  ON post_likes FOR SELECT
+  USING (true);
 
-CREATE POLICY "Users can delete own comments" ON blog_comments
-  FOR DELETE USING (auth.uid() = author_id);
+CREATE POLICY "Authenticated users can like posts"
+  ON post_likes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
 
--- Team rotations policies
-CREATE POLICY "Rotations are viewable by authenticated users" ON team_rotations
-  FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Users can remove own likes"
+  ON post_likes FOR DELETE
+  USING (auth.uid() = user_id);
 
-CREATE POLICY "Only admins can manage rotations" ON team_rotations
-  FOR ALL USING (
+-- Communities policies
+CREATE POLICY "Public communities are viewable by everyone"
+  ON communities FOR SELECT
+  USING (
+    visibility = 'public' 
+    OR EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = communities.id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Authenticated users can create communities"
+  ON communities FOR INSERT
+  WITH CHECK (auth.uid() = created_by);
+
+CREATE POLICY "Community admins can update"
+  ON communities FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = communities.id
+      AND community_members.user_id = auth.uid()
+      AND community_members.role = 'admin'
+    )
+  );
+
+-- Community members policies
+CREATE POLICY "Community members are viewable by community members"
+  ON community_members FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members cm2
+      WHERE cm2.community_id = community_members.community_id
+      AND cm2.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can join public communities"
+  ON community_members FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM communities
+      WHERE communities.id = community_id
+      AND communities.visibility = 'public'
+    )
+  );
+
+CREATE POLICY "Users can leave communities"
+  ON community_members FOR DELETE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Community admins can manage members"
+  ON community_members FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members cm2
+      WHERE cm2.community_id = community_members.community_id
+      AND cm2.user_id = auth.uid()
+      AND cm2.role = 'admin'
+    )
+  );
+
+-- Community messages policies
+CREATE POLICY "Community members can view messages"
+  ON community_messages FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_messages.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Community members can send messages"
+  ON community_messages FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_messages.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+-- Community memos policies
+CREATE POLICY "Community members can view memos"
+  ON community_memos FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_memos.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Community members can create memos"
+  ON community_memos FOR INSERT
+  WITH CHECK (
+    auth.uid() = author_id
+    AND EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_memos.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Memo authors can update own memos"
+  ON community_memos FOR UPDATE
+  USING (auth.uid() = author_id);
+
+CREATE POLICY "Memo authors can delete own memos"
+  ON community_memos FOR DELETE
+  USING (auth.uid() = author_id);
+
+-- Community files policies
+CREATE POLICY "Community members can view files"
+  ON community_files FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_files.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Community members can upload files"
+  ON community_files FOR INSERT
+  WITH CHECK (
+    auth.uid() = uploaded_by
+    AND EXISTS (
+      SELECT 1 FROM community_members
+      WHERE community_members.community_id = community_files.community_id
+      AND community_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "File uploaders can delete own files"
+  ON community_files FOR DELETE
+  USING (auth.uid() = uploaded_by);
+
+-- Admin logs policies
+CREATE POLICY "Only admins can view admin logs"
+  ON admin_logs FOR SELECT
+  USING (
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
@@ -77,119 +252,12 @@ CREATE POLICY "Only admins can manage rotations" ON team_rotations
     )
   );
 
--- Teams policies
-CREATE POLICY "Teams are viewable by members" ON teams
-  FOR SELECT USING (
+CREATE POLICY "System can insert admin logs"
+  ON admin_logs FOR INSERT
+  WITH CHECK (
     EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = teams.id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
--- Team members policies
-CREATE POLICY "Team members are viewable by team members" ON team_members
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM team_members tm
-      WHERE tm.team_id = team_members.team_id
-      AND tm.user_id = auth.uid()
-    )
-  );
-
--- Team messages policies
-CREATE POLICY "Team messages are viewable by team members" ON team_messages
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = team_messages.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Team members can create messages" ON team_messages
-  FOR INSERT WITH CHECK (
-    auth.uid() = author_id AND
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = team_messages.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
--- Team memos policies
-CREATE POLICY "Team memos are viewable by team members" ON team_memos
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = team_memos.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Team members can create memos" ON team_memos
-  FOR INSERT WITH CHECK (
-    auth.uid() = author_id AND
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = team_memos.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Memo authors can update own memos" ON team_memos
-  FOR UPDATE USING (auth.uid() = author_id);
-
-CREATE POLICY "Memo authors can delete own memos" ON team_memos
-  FOR DELETE USING (auth.uid() = author_id);
-
--- Tasks policies
-CREATE POLICY "Tasks are viewable by team members" ON tasks
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = tasks.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Team members can create tasks" ON tasks
-  FOR INSERT WITH CHECK (
-    auth.uid() = created_by AND
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = tasks.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Team members can update tasks" ON tasks
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM team_members
-      WHERE team_members.team_id = tasks.team_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
--- Task comments policies
-CREATE POLICY "Task comments are viewable by team members" ON task_comments
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM tasks
-      JOIN team_members ON team_members.team_id = tasks.team_id
-      WHERE tasks.id = task_comments.task_id
-      AND team_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Team members can create task comments" ON task_comments
-  FOR INSERT WITH CHECK (
-    auth.uid() = author_id AND
-    EXISTS (
-      SELECT 1 FROM tasks
-      JOIN team_members ON team_members.team_id = tasks.team_id
-      WHERE tasks.id = task_comments.task_id
-      AND team_members.user_id = auth.uid()
+      SELECT 1 FROM profiles
+      WHERE profiles.id = admin_id
+      AND profiles.role = 'admin'
     )
   );

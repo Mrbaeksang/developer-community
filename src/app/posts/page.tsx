@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,103 +21,111 @@ import {
   MessageCircle,
   PenSquare,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react'
 
-// 임시 데이터
-const categories = [
-  { id: 'all', name: '전체', slug: 'all', color: '#6B7280' },
-  { id: 'project', name: '프로젝트', slug: 'project', color: '#3B82F6' },
-  { id: 'tech', name: '기술', slug: 'tech', color: '#10B981' },
-  { id: 'news', name: '뉴스', slug: 'news', color: '#F59E0B' },
-  { id: 'qna', name: '질문', slug: 'qna', color: '#EF4444' },
-  { id: 'tutorial', name: '튜토리얼', slug: 'tutorial', color: '#8B5CF6' },
-  { id: 'career', name: '취업', slug: 'career', color: '#EC4899' }
-]
+// 타입 정의
+interface Category {
+  id: string
+  name: string
+  slug: string
+  color: string
+}
 
-const posts = [
-  {
-    id: '1',
-    title: 'Next.js 14와 Server Actions로 풀스택 앱 만들기',
-    excerpt: '최신 Next.js 기능을 활용한 실전 프로젝트 구축 가이드입니다.',
-    content: '...',
-    author: { id: '1', username: 'devmaster', avatar_url: null },
-    category: categories[2],
-    status: 'approved',
-    view_count: 1542,
-    like_count: 89,
-    comment_count: 23,
-    tags: ['Next.js', 'React', 'TypeScript'],
-    created_at: '2025-01-18T10:00:00Z'
-  },
-  {
-    id: '2',
-    title: 'AI 스타트업이 투자받는 방법',
-    excerpt: '실리콘밸리에서 AI 스타트업을 운영하며 배운 투자 유치 노하우를 공유합니다.',
-    content: '...',
-    author: { id: '2', username: 'startup_founder', avatar_url: null },
-    category: categories[3],
-    status: 'approved',
-    view_count: 2103,
-    like_count: 156,
-    comment_count: 45,
-    tags: ['스타트업', 'AI', '투자'],
-    created_at: '2025-01-17T14:30:00Z'
-  },
-  {
-    id: '3',
-    title: 'React 19의 새로운 기능들',
-    excerpt: 'React 19에서 추가된 주요 기능들과 변경사항을 정리했습니다.',
-    content: '...',
-    author: { id: '3', username: 'react_lover', avatar_url: null },
-    category: categories[2],
-    status: 'approved',
-    view_count: 432,
-    like_count: 28,
-    comment_count: 12,
-    tags: ['React', 'Frontend'],
-    created_at: '2025-01-20T09:00:00Z'
-  },
-  {
-    id: '4',
-    title: '주니어 개발자 면접 준비 가이드',
-    excerpt: '주니어 백엔드 개발자 면접을 준비하는 분들을 위한 체크리스트입니다.',
-    content: '...',
-    author: { id: '4', username: 'job_seeker', avatar_url: null },
-    category: categories[6],
-    status: 'approved',
-    view_count: 891,
-    like_count: 67,
-    comment_count: 34,
-    tags: ['면접', '취업', '백엔드'],
-    created_at: '2025-01-19T16:20:00Z'
+interface Post {
+  id: string
+  title: string
+  excerpt: string
+  content: string
+  author: {
+    id: string
+    username: string
+    avatar_url: string | null
   }
-]
+  category: Category
+  status: string
+  view_count: number
+  like_count: number
+  comment_count: number
+  tags: string[]
+  created_at: string
+}
 
 export default function PostsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
+  const [posts, setPosts] = useState<Post[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.excerpt.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || post.category.id === selectedCategory
-    return matchesSearch && matchesCategory
-  })
-
-  const sortedPosts = [...filteredPosts].sort((a, b) => {
-    switch (sortBy) {
-      case 'popular':
-        return b.view_count - a.view_count
-      case 'likes':
-        return b.like_count - a.like_count
-      case 'comments':
-        return b.comment_count - a.comment_count
-      default: // latest
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  // 카테고리 데이터 로드
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories')
+        if (!response.ok) throw new Error('카테고리를 불러오는데 실패했습니다')
+        const data = await response.json()
+        setCategories([
+          { id: 'all', name: '전체', slug: 'all', color: '#6B7280' },
+          ...data
+        ])
+      } catch (err) {
+        console.error('카테고리 로드 실패:', err)
+        setError(err instanceof Error ? err.message : '카테고리를 불러오는데 실패했습니다')
+      }
     }
-  })
+    fetchCategories()
+  }, [])
+
+  // 게시글 데이터 로드
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: '12',
+          status: 'published'
+        })
+        
+        if (selectedCategory !== 'all') {
+          params.append('category', selectedCategory)
+        }
+        
+        if (searchQuery) {
+          params.append('search', searchQuery)
+        }
+        
+        if (sortBy !== 'latest') {
+          params.append('sort', sortBy)
+        }
+
+        const response = await fetch(`/api/posts?${params}`)
+        if (!response.ok) throw new Error('게시글을 불러오는데 실패했습니다')
+        
+        const data = await response.json()
+        setPosts(data.posts || [])
+        setTotalPages(data.totalPages || 1)
+      } catch (err) {
+        console.error('게시글 로드 실패:', err)
+        setError(err instanceof Error ? err.message : '게시글을 불러오는데 실패했습니다')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPosts()
+  }, [page, selectedCategory, searchQuery, sortBy])
+
+  // 검색어나 필터 변경 시 첫 페이지로 이동
+  useEffect(() => {
+    setPage(1)
+  }, [selectedCategory, searchQuery, sortBy])
 
   return (
     <div className="container py-8">
@@ -175,81 +183,128 @@ export default function PostsPage() {
         </div>
       </div>
 
-      {/* 게시글 목록 */}
-      <div className="grid gap-4">
-        {sortedPosts.map((post) => (
-          <Card key={post.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1 flex-1">
-                  <CardTitle className="text-xl line-clamp-2">
-                    <Link href={`/posts/${post.id}`} className="hover:text-primary transition-colors">
-                      {post.title}
-                    </Link>
-                  </CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {post.excerpt}
-                  </CardDescription>
-                </div>
-                <Badge 
-                  variant="secondary" 
-                  style={{ 
-                    backgroundColor: `${post.category.color}20`, 
-                    color: post.category.color 
-                  }}
-                >
-                  {post.category.name}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardFooter className="flex items-center justify-between">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Eye className="h-4 w-4" />
-                  {post.view_count.toLocaleString()}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Heart className="h-4 w-4" />
-                  {post.like_count}
-                </span>
-                <span className="flex items-center gap-1">
-                  <MessageCircle className="h-4 w-4" />
-                  {post.comment_count}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{post.author.username}</span>
-                <span>·</span>
-                <span>{new Date(post.created_at).toLocaleDateString('ko-KR')}</span>
-              </div>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
+      {/* 로딩 상태 */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">게시글을 불러오는 중...</span>
+        </div>
+      )}
 
-      {/* 빈 상태 */}
-      {sortedPosts.length === 0 && (
+      {/* 에러 상태 */}
+      {error && (
         <div className="text-center py-16">
-          <p className="text-muted-foreground mb-4">검색 결과가 없습니다</p>
-          <Button asChild>
-            <Link href="/posts/write">
-              <PenSquare className="mr-2 h-4 w-4" />
-              첫 글 작성하기
-            </Link>
+          <p className="text-red-500 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>
+            다시 시도
           </Button>
         </div>
       )}
 
-      {/* 페이지네이션 */}
-      {sortedPosts.length > 0 && (
-        <div className="mt-8 flex justify-center">
-          <Button variant="outline" className="mr-2" disabled>
-            이전
-          </Button>
-          <Button variant="outline" disabled>
-            다음
-          </Button>
-        </div>
+      {/* 게시글 목록 */}
+      {!loading && !error && (
+        <>
+          <div className="grid gap-4">
+            {posts.map((post) => (
+              <Card key={post.id} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      <CardTitle className="text-xl line-clamp-2">
+                        <Link href={`/posts/${post.id}`} className="hover:text-primary transition-colors">
+                          {post.title}
+                        </Link>
+                      </CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {post.excerpt}
+                      </CardDescription>
+                    </div>
+                    <Badge 
+                      variant="secondary" 
+                      style={{ 
+                        backgroundColor: `${post.category.color}20`, 
+                        color: post.category.color 
+                      }}
+                    >
+                      {post.category.name}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardFooter className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Eye className="h-4 w-4" />
+                      {post.view_count.toLocaleString()}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Heart className="h-4 w-4" />
+                      {post.like_count}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageCircle className="h-4 w-4" />
+                      {post.comment_count}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>{post.author.username}</span>
+                    <span>·</span>
+                    <span>{new Date(post.created_at).toLocaleDateString('ko-KR')}</span>
+                  </div>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+
+          {/* 빈 상태 */}
+          {posts.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground mb-4">
+                {searchQuery || selectedCategory !== 'all' ? '검색 결과가 없습니다' : '작성된 게시글이 없습니다'}
+              </p>
+              <Button asChild>
+                <Link href="/posts/write">
+                  <PenSquare className="mr-2 h-4 w-4" />
+                  첫 글 작성하기
+                </Link>
+              </Button>
+            </div>
+          )}
+
+          {/* 페이지네이션 */}
+          {posts.length > 0 && totalPages > 1 && (
+            <div className="mt-8 flex justify-center gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setPage(page - 1)}
+                disabled={page <= 1}
+              >
+                이전
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i))
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={page === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                })}
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages}
+              >
+                다음
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

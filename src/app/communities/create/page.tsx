@@ -43,13 +43,31 @@ export default function CreateCommunityPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // TODO: 실제 커뮤니티 생성 로직
-    console.log('커뮤니티 생성:', { ...formData, tags })
-    
-    // 임시로 커뮤니티 목록으로 리다이렉트
-    setTimeout(() => {
-      router.push('/communities')
-    }, 1000)
+    try {
+      const response = await fetch('/api/communities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          tags
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '커뮤니티 생성에 실패했습니다')
+      }
+
+      const community = await response.json()
+      router.push(`/communities/${community.id}`)
+    } catch (error) {
+      // 커뮤니티 생성 에러 처리
+      alert(error instanceof Error ? error.message : '커뮤니티 생성에 실패했습니다')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const generateSlug = (name: string) => {

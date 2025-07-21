@@ -44,9 +44,27 @@ export async function updateSession(request: NextRequest) {
 
   // 관리자 라우트 체크
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    // TODO: 관리자 권한 체크 (user.role)
-    // 일단은 로그인한 사용자만 체크
     if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/login'
+      return NextResponse.redirect(url)
+    }
+    
+    // 관리자 권한 체크
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      
+      if (profile?.role !== 'admin') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/unauthorized'
+        return NextResponse.redirect(url)
+      }
+    } catch (error) {
+      console.error('관리자 권한 확인 실패:', error)
       const url = request.nextUrl.clone()
       url.pathname = '/unauthorized'
       return NextResponse.redirect(url)

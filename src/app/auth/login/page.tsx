@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 
 export default function LoginPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -18,11 +20,32 @@ export default function LoginPage() {
     setIsLoading(true)
     setError('')
 
-    // TODO: Supabase 로그인 구현
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push('/teams')
-    }, 1000)
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    try {
+      // 로그인 시도
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      // 로그인 응답 처리
+
+      if (error) throw error
+
+      if (data.user) {
+        // 로그인 성공
+        router.push('/')
+        router.refresh()
+      }
+    } catch (err: unknown) {
+      // 로그인 에러 처리
+      setError(err instanceof Error ? err.message : '로그인에 실패했습니다.')
+    }
+    setIsLoading(false)
   }
 
   return (
@@ -47,8 +70,10 @@ export default function LoginPage() {
               <Label htmlFor="email">이메일</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
-                placeholder="name@example.com"
+                placeholder="your@email.com"
+                autoComplete="email"
                 required
               />
             </div>
@@ -56,7 +81,9 @@ export default function LoginPage() {
               <Label htmlFor="password">비밀번호</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
                 required
               />
             </div>

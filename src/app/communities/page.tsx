@@ -6,7 +6,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { PostCardSkeleton } from '@/components/ui/skeleton'
+import { OptimizedAvatar } from '@/components/ui/optimized-image'
+import { useCommunities } from '@/hooks/use-api'
+import { useDebouncedSearch } from '@/hooks/use-debounced-search'
 import { 
   Search, 
   Plus, 
@@ -16,86 +19,105 @@ import {
   MessageCircle,
   FileText,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
 
-// 임시 커뮤니티 데이터
-const allCommunity = {
-  id: 'all',
-  name: '전체 커뮤니티',
-  slug: 'all',
-  description: '모든 회원이 참여하는 공개 커뮤니티입니다. 자유롭게 소통하고 지식을 공유하세요.',
-  is_public: true,
-  is_default: true,
-  member_count: 1234,
-  owner: { id: 'system', username: 'system' },
-  created_at: '2025-01-01T00:00:00Z',
-  recent_activity: '방금 전',
-  stats: {
-    messages: 15420,
-    memos: 342,
-    files: 89
-  }
+interface Community {
+  id: string
+  name: string
+  slug: string
+  description: string
+  avatar_url?: string
+  is_public: boolean
+  is_default: boolean
+  member_count: number
+  max_members?: number
+  owner?: { id: string; username: string }
+  created_at: string
+  tags?: string[]
+  is_member?: boolean
 }
-
-const privateCommunities = [
-  {
-    id: '1',
-    name: 'React 마스터즈',
-    slug: 'react-masters',
-    description: 'React와 Next.js를 깊이 있게 공부하는 소규모 스터디 그룹입니다.',
-    avatar_url: null,
-    is_public: false,
-    member_count: 5,
-    max_members: 10,
-    owner: { id: '1', username: 'devmaster' },
-    created_at: '2025-01-15T10:00:00Z',
-    recent_activity: '2시간 전',
-    tags: ['React', 'Next.js', 'TypeScript']
-  },
-  {
-    id: '2',
-    name: '백엔드 아키텍처 연구소',
-    slug: 'backend-arch',
-    description: '확장 가능한 백엔드 시스템 설계를 연구하고 토론하는 커뮤니티입니다.',
-    avatar_url: null,
-    is_public: false,
-    member_count: 4,
-    max_members: 5,
-    owner: { id: '2', username: 'backend_expert' },
-    created_at: '2025-01-10T14:30:00Z',
-    recent_activity: '1일 전',
-    tags: ['Backend', 'Architecture', 'Microservices']
-  },
-  {
-    id: '3',
-    name: 'AI 프로젝트팀',
-    slug: 'ai-project',
-    description: 'AI 기반 서비스를 함께 개발하는 프로젝트 팀입니다.',
-    avatar_url: null,
-    is_public: true, // 공개 커뮤니티 (가입 가능)
-    member_count: 3,
-    max_members: 6,
-    owner: { id: '3', username: 'ai_developer' },
-    created_at: '2025-01-18T09:00:00Z',
-    recent_activity: '30분 전',
-    tags: ['AI', 'Python', 'TensorFlow']
-  }
-]
-
-// 현재 사용자가 속한 커뮤니티 ID (임시)
-const userCommunities = ['1', '3']
 
 export default function CommunitiesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showOnlyMyCommunities, setShowOnlyMyCommunities] = useState(false)
 
+  // React Query로 커뮤니티 목록 가져오기
+  const { 
+    data: communitiesData, 
+    isLoading, 
+    error: fetchError,
+    refetch: refetchCommunities
+  } = useCommunities({})
+
+  const communities = communitiesData || []
+
+  // 전체 커뮤니티와 프라이빗 커뮤니티 분리
+  const allCommunity = communities.find(c => c.is_default)
+  const privateCommunities = communities.filter(c => !c.is_default)
+
   const filteredCommunities = privateCommunities.filter(community => {
     const matchesSearch = community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          community.description.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesFilter = !showOnlyMyCommunities || userCommunities.includes(community.id)
+    const matchesFilter = !showOnlyMyCommunities || community.is_member
     return matchesSearch && matchesFilter
   })
+
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        {/* 헤더 스켈레톤 */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="h-8 w-32 bg-muted animate-pulse rounded mb-2" />
+              <div className="h-5 w-96 bg-muted animate-pulse rounded" />
+            </div>
+            <div className="h-10 w-40 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="h-10 bg-muted animate-pulse rounded flex-1" />
+            <div className="h-10 w-40 bg-muted animate-pulse rounded" />
+          </div>
+        </div>
+        
+        {/* 콘텐츠 스켈레톤 */}
+        <div className="space-y-12">
+          <div>
+            <div className="h-6 w-32 bg-muted animate-pulse rounded mb-4" />
+            <div className="h-32 bg-muted animate-pulse rounded" />
+          </div>
+          <div>
+            <div className="h-6 w-40 bg-muted animate-pulse rounded mb-4" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <PostCardSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="container py-8">
+        <div className="text-center py-12">
+          <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">커뮤니티 목록을 불러올 수 없습니다</h2>
+          <p className="text-destructive mb-4">
+            {fetchError instanceof Error ? fetchError.message : '알 수 없는 오류가 발생했습니다'}
+          </p>
+          <Button onClick={() => refetchCommunities()}>
+            다시 시도
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container py-8">
@@ -139,82 +161,73 @@ export default function CommunitiesPage() {
       </div>
 
       {/* 전체 커뮤니티 */}
-      <section className="mb-12">
-        <h2 className="text-xl font-semibold mb-4">공개 커뮤니티</h2>
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-12 w-12">
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Globe className="h-6 w-6" />
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    {allCommunity.name}
-                    <Badge variant="secondary">기본</Badge>
-                  </CardTitle>
-                  <CardDescription>{allCommunity.description}</CardDescription>
+      {allCommunity && (
+        <section className="mb-12">
+          <h2 className="text-xl font-semibold mb-4">공개 커뮤니티</h2>
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <OptimizedAvatar
+                    src={allCommunity.avatar_url}
+                    alt={allCommunity.name}
+                    size="lg"
+                    fallbackInitial="🌐"
+                    className="bg-primary text-primary-foreground"
+                  />
+                  <div>
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      {allCommunity.name}
+                      <Badge variant="secondary">기본</Badge>
+                    </CardTitle>
+                    <CardDescription>{allCommunity.description}</CardDescription>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold">{allCommunity.stats.messages.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">메시지</p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  {allCommunity.member_count.toLocaleString()}명
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  {new Date(allCommunity.created_at).toLocaleDateString('ko-KR')} 생성
+                </span>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{allCommunity.stats.memos}</p>
-                <p className="text-sm text-muted-foreground">메모</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{allCommunity.stats.files}</p>
-                <p className="text-sm text-muted-foreground">파일</p>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                {allCommunity.member_count.toLocaleString()}명
-              </span>
-              <span className="flex items-center gap-1">
-                <MessageCircle className="h-4 w-4" />
-                {allCommunity.recent_activity}
-              </span>
-            </div>
-            <Button asChild>
-              <Link href={`/communities/${allCommunity.id}`}>
-                입장하기
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      </section>
+            </CardContent>
+            <CardFooter className="flex items-center justify-between">
+              <div />
+              <Button asChild>
+                <Link href={`/communities/${allCommunity.id}`}>
+                  입장하기
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </section>
+      )}
 
       {/* 프라이빗 커뮤니티 목록 */}
       <section>
         <h2 className="text-xl font-semibold mb-4">프라이빗 커뮤니티</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredCommunities.map((community) => {
-            const isMember = userCommunities.includes(community.id)
-            const isFull = community.member_count >= community.max_members
+            const isMember = community.is_member || false
+            const isFull = community.max_members ? community.member_count >= community.max_members : false
 
             return (
               <Card key={community.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={community.avatar_url || undefined} />
-                      <AvatarFallback>
-                        {community.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <OptimizedAvatar
+                      src={community.avatar_url}
+                      alt={community.name}
+                      size="md"
+                      fallbackInitial={community.name.slice(0, 2).toUpperCase()}
+                    />
                     <div className="flex items-center gap-1">
                       {community.is_public ? (
                         <Globe className="h-4 w-4 text-muted-foreground" />
@@ -229,17 +242,10 @@ export default function CommunitiesPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {community.tags.map(tag => (
-                      <Badge key={tag} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Users className="h-3.5 w-3.5" />
-                      {community.member_count}/{community.max_members}
+                      {community.member_count}/{community.max_members || '∞'}
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />

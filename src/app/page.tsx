@@ -6,127 +6,156 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { PostCardSkeleton } from '@/components/ui/skeleton'
+import { OptimizedAvatar } from '@/components/ui/optimized-image'
+import { useDebouncedSearch } from '@/hooks/use-debounced-search'
+import { useInfinitePostsScroll } from '@/hooks/use-infinite-scroll'
+import { 
+  usePosts, 
+  useCategories, 
+  useAdminStats, 
+  usePopularTags,
+  useSearchPosts 
+} from '@/hooks/use-api'
 import { 
   Search, 
-  Filter, 
   TrendingUp, 
-  Clock, 
   Eye, 
   Heart, 
   MessageCircle,
   PenSquare,
   Users,
   Flame,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react'
+import type { Post, Category, Author } from '@/types/post'
 
-// 임시 데이터
-const categories = [
-  { id: 'all', name: '전체', slug: 'all', color: '#6B7280', icon: 'grid' },
-  { id: 'project', name: '프로젝트', slug: 'project', color: '#3B82F6', icon: 'folder' },
-  { id: 'tech', name: '기술', slug: 'tech', color: '#10B981', icon: 'code' },
-  { id: 'news', name: '뉴스', slug: 'news', color: '#F59E0B', icon: 'newspaper' },
-  { id: 'qna', name: '질문', slug: 'qna', color: '#EF4444', icon: 'help-circle' },
-  { id: 'tutorial', name: '튜토리얼', slug: 'tutorial', color: '#8B5CF6', icon: 'book-open' },
-  { id: 'career', name: '취업', slug: 'career', color: '#EC4899', icon: 'briefcase' }
-]
-
-const featuredPosts = [
-  {
-    id: '1',
-    title: 'Next.js 14와 Server Actions로 풀스택 앱 만들기',
-    excerpt: '최신 Next.js 기능을 활용한 실전 프로젝트 구축 가이드입니다. Server Actions와 App Router를 중심으로 설명합니다.',
-    author: {
-      id: '1',
-      username: 'devmaster',
-      avatar_url: null
-    },
-    category: categories[2],
-    status: 'approved',
-    view_count: 1542,
-    like_count: 89,
-    comment_count: 23,
-    featured: true,
-    tags: ['Next.js', 'React', 'TypeScript'],
-    created_at: '2025-01-18T10:00:00Z'
-  },
-  {
-    id: '2',
-    title: 'AI 스타트업이 투자받는 방법',
-    excerpt: '실리콘밸리에서 AI 스타트업을 운영하며 배운 투자 유치 노하우를 공유합니다.',
-    author: {
-      id: '2',
-      username: 'startup_founder',
-      avatar_url: null
-    },
-    category: categories[3],
-    status: 'approved',
-    view_count: 2103,
-    like_count: 156,
-    comment_count: 45,
-    featured: true,
-    tags: ['스타트업', 'AI', '투자'],
-    created_at: '2025-01-17T14:30:00Z'
-  }
-]
-
-const recentPosts = [
-  {
-    id: '3',
-    title: 'React 19의 새로운 기능들',
-    excerpt: 'React 19에서 추가된 주요 기능들과 변경사항을 정리했습니다.',
-    author: {
-      id: '3',
-      username: 'react_lover',
-      avatar_url: null
-    },
-    category: categories[2],
-    status: 'approved',
-    view_count: 432,
-    like_count: 28,
-    comment_count: 12,
-    tags: ['React', 'Frontend'],
-    created_at: '2025-01-20T09:00:00Z'
-  },
-  {
-    id: '4',
-    title: '주니어 개발자 면접 준비 가이드',
-    excerpt: '주니어 백엔드 개발자 면접을 준비하는 분들을 위한 체크리스트입니다.',
-    author: {
-      id: '4',
-      username: 'job_seeker',
-      avatar_url: null
-    },
-    category: categories[6],
-    status: 'approved',
-    view_count: 891,
-    like_count: 67,
-    comment_count: 34,
-    tags: ['면접', '취업', '백엔드'],
-    created_at: '2025-01-19T16:20:00Z'
-  },
-  {
-    id: '5',
-    title: 'Docker Compose로 개발 환경 구축하기',
-    excerpt: '로컬 개발 환경을 Docker Compose로 통일하는 방법을 소개합니다.',
-    author: {
-      id: '5',
-      username: 'docker_pro',
-      avatar_url: null
-    },
-    category: categories[5],
-    status: 'approved',
-    view_count: 567,
-    like_count: 45,
-    comment_count: 19,
-    tags: ['Docker', 'DevOps'],
-    created_at: '2025-01-19T11:15:00Z'
-  }
-]
+// 타입 정의
+interface Tag {
+  tag: string
+  count: number
+}
 
 export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // React Query 훅들 사용
+  const { data: categoriesData, isLoading: categoriesLoading } = useCategories()
+  const { data: statsData, isLoading: statsLoading } = useAdminStats()
+  const { data: tagsData, isLoading: tagsLoading } = usePopularTags(10)
+  
+  // Featured posts (최신 2개)
+  const { data: featuredPosts, isLoading: featuredLoading } = usePosts({ 
+    limit: 2, 
+    status: 'published' 
+  })
+  
+  // 검색 기능 (디바운싱 적용)
+  const { 
+    result: { data: searchResults, loading: searchLoading, error: searchError }
+  } = useDebouncedSearch(
+    async (query: string) => {
+      const response = await fetch(`/api/posts/search?q=${encodeURIComponent(query)}`)
+      if (!response.ok) throw new Error('검색 실패')
+      return response.json()
+    },
+    { delay: 300, minLength: 2 }
+  )
+  
+  // 무한 스크롤로 게시글 로드
+  const {
+    data: infinitePosts,
+    loading: infiniteLoading,
+    error: infiniteError,
+    hasMore,
+    loadMore
+  } = useInfinitePostsScroll(
+    selectedCategory === 'all' ? undefined : selectedCategory,
+    searchQuery.length >= 2 ? searchQuery : undefined
+  )
+
+  // 검색 상태 업데이트
+  const handleSearchInput = (value: string) => {
+    setSearchQuery(value)
+    if (value.length >= 2) {
+      // 검색 실행 (디바운싱됨)
+    }
+  }
+
+  // 카테고리 데이터 준비 (전체 카테고리 추가)
+  const categories = categoriesData ? [
+    { id: 'all', name: '전체', slug: 'all', color: '#6B7280' },
+    ...categoriesData
+  ] : []
+
+  // 로딩 상태 통합
+  const isInitialLoading = categoriesLoading || statsLoading || tagsLoading || featuredLoading
+
+  // 초기 로딩 상태 - 스켈레톤 표시
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+        {/* 히어로 섹션 스켈레톤 */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/10 to-background border-b">
+          <div className="container py-12">
+            <div className="max-w-3xl mx-auto text-center space-y-4">
+              <div className="h-12 bg-muted animate-pulse rounded-lg" />
+              <div className="h-6 bg-muted animate-pulse rounded-lg w-2/3 mx-auto" />
+              <div className="h-12 bg-muted animate-pulse rounded-lg w-96 mx-auto" />
+            </div>
+          </div>
+        </section>
+
+        {/* 카테고리 스켈레톤 */}
+        <section className="border-b">
+          <div className="container py-4">
+            <div className="flex gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-8 w-20 bg-muted animate-pulse rounded" />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 콘텐츠 스켈레톤 */}
+        <div className="container py-8">
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <div className="space-y-4">
+                <div className="h-8 w-40 bg-muted animate-pulse rounded" />
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <PostCardSkeleton key={i} />
+                ))}
+              </div>
+            </div>
+            <aside className="space-y-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
+              ))}
+            </aside>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 치명적 에러 상태
+  if (infiniteError && !infinitePosts.length) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+        <div className="container py-16 text-center">
+          <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">데이터를 불러올 수 없습니다</h2>
+          <p className="text-muted-foreground mb-4">{infiniteError}</p>
+          <Button onClick={() => window.location.reload()}>
+            페이지 새로고침
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -146,7 +175,7 @@ export default function HomePage() {
                 <Input
                   placeholder="관심있는 주제를 검색해보세요..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearchInput(e.target.value)}
                   className="pl-10 h-12 text-base"
                 />
               </div>
@@ -191,7 +220,7 @@ export default function HomePage() {
           {/* 메인 콘텐츠 */}
           <div className="lg:col-span-2 space-y-8">
             {/* 인기 게시글 */}
-            {selectedCategory === 'all' && (
+            {selectedCategory === 'all' && featuredPosts && featuredPosts.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-6">
                   <Flame className="h-5 w-5 text-orange-500" />
@@ -221,19 +250,24 @@ export default function HomePage() {
                         <div className="flex items-center gap-4">
                           <span className="flex items-center gap-1">
                             <Eye className="h-4 w-4" />
-                            {post.view_count.toLocaleString()}
+                            {post.view_count?.toLocaleString() || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <Heart className="h-4 w-4" />
-                            {post.like_count}
+                            {post.like_count || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <MessageCircle className="h-4 w-4" />
-                            {post.comment_count}
+                            {post.comment_count || 0}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>{post.author.username}</span>
+                          <OptimizedAvatar 
+                            src={post.author?.avatar_url}
+                            alt={post.author?.full_name || post.author?.username || ''}
+                            size="sm"
+                          />
+                          <span>{post.author?.full_name || post.author?.username}</span>
                           <span>·</span>
                           <span>{new Date(post.created_at).toLocaleDateString('ko-KR')}</span>
                         </div>
@@ -244,17 +278,30 @@ export default function HomePage() {
               </section>
             )}
 
-            {/* 최신 게시글 */}
+            {/* 최신 게시글 (무한 스크롤) */}
             <section>
               <div className="flex items-center gap-2 mb-6">
                 <Sparkles className="h-5 w-5 text-blue-500" />
-                <h2 className="text-2xl font-bold">최신 게시글</h2>
+                <h2 className="text-2xl font-bold">
+                  {searchQuery.length >= 2 ? `검색 결과: "${searchQuery}"` : '최신 게시글'}
+                </h2>
+                {searchQuery.length >= 2 && (
+                  <Badge variant="secondary">
+                    {infinitePosts.length}개 발견
+                  </Badge>
+                )}
               </div>
+
+              {/* 검색 에러 표시 */}
+              {searchError && (
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
+                  <p className="text-sm text-destructive">검색 중 오류가 발생했습니다: {searchError}</p>
+                </div>
+              )}
+
               <div className="space-y-4">
-                {recentPosts
-                  .filter(post => selectedCategory === 'all' || post.category.id === selectedCategory)
-                  .map((post) => (
-                  <Card key={post.id} className="hover:shadow-md transition-shadow">
+                {infinitePosts.map((post, index: number) => (
+                  <Card key={`${post.id}-${index}`} className="hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1 flex-1">
@@ -266,6 +313,15 @@ export default function HomePage() {
                           <CardDescription className="line-clamp-2">
                             {post.excerpt}
                           </CardDescription>
+                          {post.tags && post.tags.length > 0 && (
+                            <div className="flex gap-1 mt-2">
+                              {post.tags.slice(0, 3).map((tag: string) => (
+                                <Badge key={tag} variant="outline" className="text-xs">
+                                  #{tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <Badge variant="outline" style={{ borderColor: post.category.color, color: post.category.color }}>
                           {post.category.name}
@@ -277,19 +333,24 @@ export default function HomePage() {
                         <div className="flex items-center gap-3">
                           <span className="flex items-center gap-1">
                             <Eye className="h-3.5 w-3.5" />
-                            {post.view_count}
+                            {post.view_count?.toLocaleString() || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <Heart className="h-3.5 w-3.5" />
-                            {post.like_count}
+                            {post.like_count || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <MessageCircle className="h-3.5 w-3.5" />
-                            {post.comment_count}
+                            {post.comment_count || 0}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>{post.author.username}</span>
+                          <OptimizedAvatar 
+                            src={post.author?.avatar_url}
+                            alt={post.author?.full_name || post.author?.username || ''}
+                            size="sm"
+                          />
+                          <span>{post.author?.full_name || post.author?.username}</span>
                           <span>·</span>
                           <span>{new Date(post.created_at).toLocaleDateString('ko-KR')}</span>
                         </div>
@@ -299,12 +360,46 @@ export default function HomePage() {
                 ))}
               </div>
 
-              {/* 더보기 버튼 */}
-              <div className="mt-8 text-center">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                  더 많은 게시글 보기
-                </Button>
-              </div>
+              {/* 로딩 표시 및 무한 스크롤 트리거 */}
+              {infiniteLoading && (
+                <div className="mt-8 space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <PostCardSkeleton key={i} />
+                  ))}
+                </div>
+              )}
+
+              {/* 더 불러올 데이터가 있을 때 트리거 */}
+              {hasMore && !infiniteLoading && (
+                <div className="mt-8 text-center">
+                  <Button 
+                    variant="outline" 
+                    size="lg" 
+                    onClick={loadMore}
+                    className="w-full sm:w-auto"
+                  >
+                    더 많은 게시글 보기
+                  </Button>
+                </div>
+              )}
+
+              {/* 모든 데이터 로드 완료 */}
+              {!hasMore && infinitePosts.length > 0 && (
+                <div className="mt-8 text-center text-sm text-muted-foreground">
+                  모든 게시글을 불러왔습니다
+                </div>
+              )}
+
+              {/* 검색 결과 없음 */}
+              {searchQuery.length >= 2 && infinitePosts.length === 0 && !infiniteLoading && (
+                <div className="mt-8 text-center py-12">
+                  <Search className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">검색 결과가 없습니다</h3>
+                  <p className="text-muted-foreground">
+                    다른 키워드로 검색해보세요
+                  </p>
+                </div>
+              )}
             </section>
           </div>
 
@@ -326,15 +421,33 @@ export default function HomePage() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">전체 회원</span>
-                    <span className="font-medium">1,234명</span>
+                    <span className="font-medium">
+                      {statsLoading ? (
+                        <div className="h-4 w-12 bg-muted animate-pulse rounded" />
+                      ) : (
+                        `${statsData?.overview?.total_users?.toLocaleString() || 0}명`
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">전체 게시글</span>
-                    <span className="font-medium">567개</span>
+                    <span className="font-medium">
+                      {statsLoading ? (
+                        <div className="h-4 w-12 bg-muted animate-pulse rounded" />
+                      ) : (
+                        `${statsData?.overview?.total_posts?.toLocaleString() || 0}개`
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">활성 커뮤니티</span>
-                    <span className="font-medium">23개</span>
+                    <span className="font-medium">
+                      {statsLoading ? (
+                        <div className="h-4 w-12 bg-muted animate-pulse rounded" />
+                      ) : (
+                        `${statsData?.overview?.total_communities?.toLocaleString() || 0}개`
+                      )}
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -357,11 +470,25 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {['React', 'Next.js', 'TypeScript', 'Node.js', 'Python', 'AI', 'DevOps', 'Docker', '면접', '알고리즘'].map((tag) => (
-                    <Badge key={tag} variant="secondary" className="cursor-pointer hover:bg-secondary/80">
-                      #{tag}
-                    </Badge>
-                  ))}
+                  {tagsLoading ? (
+                    // 태그 로딩 스켈레톤
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-6 w-16 bg-muted animate-pulse rounded-full" />
+                    ))
+                  ) : tagsData && tagsData.length > 0 ? (
+                    tagsData.map((tagData: { tag: string; count: number }) => (
+                      <Badge 
+                        key={tagData.tag} 
+                        variant="secondary" 
+                        className="cursor-pointer hover:bg-secondary/80 transition-colors"
+                        onClick={() => handleSearchInput(tagData.tag)}
+                      >
+                        #{tagData.tag} ({tagData.count})
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">태그가 없습니다</p>
+                  )}
                 </div>
               </CardContent>
             </Card>

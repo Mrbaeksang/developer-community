@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 
 export default function SignupPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,6 +21,9 @@ export default function SignupPage() {
     setError('')
 
     const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const username = formData.get('username') as string
+    const displayName = formData.get('displayName') as string
     const password = formData.get('password') as string
     const confirmPassword = formData.get('confirmPassword') as string
 
@@ -28,11 +33,47 @@ export default function SignupPage() {
       return
     }
 
-    // TODO: Supabase 회원가입 구현
-    setTimeout(() => {
-      setIsLoading(false)
-      router.push('/auth/login')
-    }, 1000)
+    try {
+      // 회원가입 시도
+      
+      // 회원가입
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            display_name: displayName,
+          }
+        }
+      })
+
+      // Supabase 응답 처리
+
+      if (error) throw error
+
+      if (data.user) {
+        // 사용자 생성 완료
+        // 프로필 생성 (이미 트리거에서 처리되지만 추가 정보 업데이트)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            username,
+            display_name: displayName
+          })
+          .eq('id', data.user.id)
+
+        if (profileError) {
+          // 프로필 업데이트 에러 처리
+        }
+      }
+
+      router.push('/auth/login?message=회원가입이 완료되었습니다.')
+    } catch (err: unknown) {
+      // 회원가입 에러 처리
+      setError(err instanceof Error ? err.message : '회원가입에 실패했습니다.')
+    }
+    setIsLoading(false)
   }
 
   return (
@@ -59,7 +100,8 @@ export default function SignupPage() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="name@example.com"
+                placeholder="your@email.com"
+                autoComplete="email"
                 required
               />
             </div>
@@ -70,6 +112,7 @@ export default function SignupPage() {
                 name="username"
                 type="text"
                 placeholder="username"
+                autoComplete="username"
                 required
               />
             </div>
@@ -80,6 +123,7 @@ export default function SignupPage() {
                 name="displayName"
                 type="text"
                 placeholder="홍길동"
+                autoComplete="name"
                 required
               />
             </div>
@@ -89,6 +133,7 @@ export default function SignupPage() {
                 id="password"
                 name="password"
                 type="password"
+                autoComplete="new-password"
                 required
               />
               <p className="text-xs text-muted-foreground">
@@ -101,6 +146,7 @@ export default function SignupPage() {
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 required
               />
             </div>

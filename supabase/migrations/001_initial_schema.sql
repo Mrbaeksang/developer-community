@@ -1,164 +1,180 @@
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create profiles table
+-- Create custom types
+CREATE TYPE user_role AS ENUM ('user', 'admin');
+CREATE TYPE post_status AS ENUM ('draft', 'pending', 'approved', 'rejected');
+CREATE TYPE community_visibility AS ENUM ('public', 'private');
+CREATE TYPE join_request_status AS ENUM ('pending', 'approved', 'rejected');
+
+-- Users table (extends Supabase auth.users)
 CREATE TABLE profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  name TEXT NOT NULL,
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT,
+  bio TEXT,
   avatar_url TEXT,
-  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
+  role user_role DEFAULT 'user',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create blog_categories table
-CREATE TABLE blog_categories (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
+-- Post categories
+CREATE TABLE post_categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT UNIQUE NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   description TEXT,
+  color TEXT DEFAULT '#6B7280',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create blog_posts table
-CREATE TABLE blog_posts (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+-- Posts
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  author_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES post_categories(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
   content TEXT NOT NULL,
   excerpt TEXT,
-  category_id UUID REFERENCES blog_categories(id),
-  author_id UUID REFERENCES profiles(id) NOT NULL,
-  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-  published_at TIMESTAMPTZ,
+  status post_status DEFAULT 'pending',
+  tags TEXT[] DEFAULT '{}',
   view_count INTEGER DEFAULT 0,
+  featured_image TEXT,
+  published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create blog_comments table
-CREATE TABLE blog_comments (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE NOT NULL,
-  author_id UUID REFERENCES profiles(id) NOT NULL,
+-- Post comments
+CREATE TABLE post_comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES post_comments(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
-  parent_id UUID REFERENCES blog_comments(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create team_rotations table
-CREATE TABLE team_rotations (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  is_active BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+-- Post likes
+CREATE TABLE post_likes (
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (post_id, user_id)
 );
 
--- Create teams table
-CREATE TABLE teams (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  rotation_id UUID REFERENCES team_rotations(id) NOT NULL,
-  name TEXT NOT NULL,
+-- Communities
+CREATE TABLE communities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT UNIQUE NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
   description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  visibility community_visibility DEFAULT 'public',
+  cover_image TEXT,
+  icon_url TEXT,
+  tags TEXT[] DEFAULT '{}',
+  max_members INTEGER DEFAULT 100,
+  created_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create team_members table
-CREATE TABLE team_members (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID REFERENCES profiles(id) NOT NULL,
-  role TEXT DEFAULT 'member' CHECK (role IN ('member', 'leader')),
+-- Community members
+CREATE TABLE community_members (
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'member' CHECK (role IN ('member', 'moderator', 'admin')),
   joined_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(team_id, user_id)
+  PRIMARY KEY (community_id, user_id)
 );
 
--- Create team_messages table
-CREATE TABLE team_messages (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
-  author_id UUID REFERENCES profiles(id) NOT NULL,
+-- Community join requests (for private communities)
+CREATE TABLE community_join_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  message TEXT,
+  status join_request_status DEFAULT 'pending',
+  reviewed_by UUID REFERENCES profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(community_id, user_id)
+);
+
+-- Community messages (real-time chat)
+CREATE TABLE community_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create team_memos table
-CREATE TABLE team_memos (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
-  author_id UUID REFERENCES profiles(id) NOT NULL,
+-- Community memos
+CREATE TABLE community_memos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
-  is_pinned BOOLEAN DEFAULT false,
+  tags TEXT[] DEFAULT '{}',
+  is_pinned BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create tasks table
-CREATE TABLE tasks (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'review', 'done')),
-  priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
-  assignee_id UUID REFERENCES profiles(id),
-  created_by UUID REFERENCES profiles(id) NOT NULL,
-  due_date DATE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create task_comments table
-CREATE TABLE task_comments (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE NOT NULL,
-  author_id UUID REFERENCES profiles(id) NOT NULL,
-  content TEXT NOT NULL,
+-- Community files
+CREATE TABLE community_files (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  uploaded_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  file_size INTEGER,
+  mime_type TEXT,
+  category TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create function to handle user creation
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, name)
-  VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)));
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Admin logs
+CREATE TABLE admin_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  admin_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id UUID,
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Create trigger for new user creation
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+-- Create indexes
+CREATE INDEX idx_posts_author ON posts(author_id);
+CREATE INDEX idx_posts_category ON posts(category_id);
+CREATE INDEX idx_posts_status ON posts(status);
+CREATE INDEX idx_posts_published ON posts(published_at);
+CREATE INDEX idx_comments_post ON post_comments(post_id);
+CREATE INDEX idx_communities_slug ON communities(slug);
+CREATE INDEX idx_community_members_user ON community_members(user_id);
+CREATE INDEX idx_community_messages_community ON community_messages(community_id);
+CREATE INDEX idx_community_files_community ON community_files(community_id);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
+    NEW.updated_at = NOW();
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ language 'plpgsql';
 
--- Add updated_at triggers
+-- Apply updated_at triggers
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_blog_posts_updated_at BEFORE UPDATE ON blog_posts
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_blog_comments_updated_at BEFORE UPDATE ON blog_comments
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_team_memos_updated_at BEFORE UPDATE ON team_memos
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON posts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_communities_updated_at BEFORE UPDATE ON communities
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_community_memos_updated_at BEFORE UPDATE ON community_memos
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

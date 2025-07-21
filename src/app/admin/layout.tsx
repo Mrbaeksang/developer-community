@@ -10,7 +10,6 @@ import {
   FileText,
   Users,
   RotateCw,
-  MessageSquare,
   BarChart3,
   Settings
 } from 'lucide-react'

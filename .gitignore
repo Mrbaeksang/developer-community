@@ -40,12 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# documentation
-*.md
-!README.md
-!ARCHITECTURE_FINAL.md
-!IMPLEMENTATION_GUIDE.md
-
 # claude
 .claude/
-CLAUDE.md

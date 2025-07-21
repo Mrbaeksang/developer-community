@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Select,
   SelectContent,
@@ -31,98 +31,243 @@ import {
   X as XIcon,
   Calendar,
   User,
-  Filter,
   Search,
   AlertCircle,
   FileText,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
 
-// 임시 대기 중 게시글 데이터
-const pendingPosts = [
-  {
-    id: '1',
-    title: 'Vue 3 Composition API 완벽 가이드',
-    excerpt: 'Vue 3에서 새롭게 도입된 Composition API를 자세히 알아보고 실제 프로젝트에 적용하는 방법을 소개합니다.',
-    content: `# Vue 3 Composition API 완벽 가이드
+// 타입 정의
+interface Category {
+  id: string
+  name: string
+  slug: string
+  color: string
+}
 
-Vue 3에서 가장 주목받는 기능 중 하나인 Composition API에 대해 알아보겠습니다...
+interface Author {
+  id: string
+  username: string
+  email: string
+  avatar_url?: string | null
+}
 
-[전체 내용 생략]`,
-    author: { id: '5', username: 'vue_developer', email: 'vue@example.com' },
-    category: { id: 'tech', name: '기술', color: '#10B981' },
-    tags: ['Vue', 'JavaScript', 'Frontend'],
-    created_at: '2025-01-20T10:30:00Z',
-    status: 'pending'
-  },
-  {
-    id: '2',
-    title: '주니어 개발자를 위한 코드 리뷰 가이드',
-    excerpt: '효과적인 코드 리뷰를 위한 체크리스트와 실전 팁을 공유합니다.',
-    content: `# 주니어 개발자를 위한 코드 리뷰 가이드
-
-코드 리뷰는 개발 문화의 중요한 부분입니다...
-
-[전체 내용 생략]`,
-    author: { id: '6', username: 'senior_dev', email: 'senior@example.com' },
-    category: { id: 'career', name: '취업', color: '#EC4899' },
-    tags: ['코드리뷰', '개발문화', '협업'],
-    created_at: '2025-01-20T09:15:00Z',
-    status: 'pending'
-  },
-  {
-    id: '3',
-    title: 'Docker Compose로 개발 환경 표준화하기',
-    excerpt: '팀 전체가 동일한 개발 환경을 사용할 수 있도록 Docker Compose를 활용하는 방법을 소개합니다.',
-    content: `# Docker Compose로 개발 환경 표준화하기
-
-개발 환경의 차이로 인한 문제를 해결하는 방법...
-
-[전체 내용 생략]`,
-    author: { id: '7', username: 'devops_engineer', email: 'devops@example.com' },
-    category: { id: 'tutorial', name: '튜토리얼', color: '#8B5CF6' },
-    tags: ['Docker', 'DevOps', '개발환경'],
-    created_at: '2025-01-19T16:45:00Z',
-    status: 'pending'
-  }
-]
+interface PendingPost {
+  id: string
+  title: string
+  excerpt: string
+  content: string
+  author: Author
+  category: Category
+  tags: string[]
+  created_at: string
+  status: string
+}
 
 export default function PendingPostsPage() {
-  const [posts, setPosts] = useState(pendingPosts)
+  const router = useRouter()
+  const [posts, setPosts] = useState<PendingPost[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedPost, setSelectedPost] = useState<typeof pendingPosts[0] | null>(null)
+  const [selectedPost, setSelectedPost] = useState<PendingPost | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null)
+  const [approving, setApproving] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<string | null>(null)
+  const [todayStats, setTodayStats] = useState({ approved: 0, rejected: 0 })
 
-  const handleApprove = (postId: string) => {
-    if (confirm('이 게시글을 승인하시겠습니까?')) {
-      setPosts(posts.filter(post => post.id !== postId))
-      // TODO: 실제 승인 처리 로직
-      alert('게시글이 승인되었습니다.')
+  // 인증 확인 및 초기 데이터 로드
+  useEffect(() => {
+    const initializePage = async () => {
+      const supabase = createClient()
+      
+      try {
+        // 현재 사용자 확인
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) {
+          router.push('/auth/login')
+          return
+        }
+
+        // 사용자 프로필 가져오기
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, username, avatar_url, role')
+          .eq('id', session.user.id)
+          .single()
+        
+        // 관리자 권한 확인
+        if (profile?.role !== 'admin') {
+          router.push('/')
+          return
+        }
+        
+        setCurrentUser(profile)
+
+        // 대기 중인 게시글 로드
+        await fetchPendingPosts()
+        
+        // 카테고리 데이터 로드
+        await fetchCategories()
+        
+        // 오늘 통계 로드
+        await fetchTodayStats()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '페이지를 불러오는데 실패했습니다')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializePage()
+  }, [router])
+
+  const fetchPendingPosts = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({
+        status: 'pending'
+      })
+      
+      if (selectedCategory !== 'all') {
+        params.append('category', selectedCategory)
+      }
+      
+      if (searchQuery) {
+        params.append('search', searchQuery)
+      }
+
+      const response = await fetch(`/api/admin/posts?${params}`)
+      if (!response.ok) throw new Error('대기 중인 게시글을 불러오는데 실패했습니다')
+      
+      const data = await response.json()
+      setPosts(data.posts || [])
+    } catch (err) {
+      console.error('게시글 로드 실패:', err)
+      setError(err instanceof Error ? err.message : '게시글을 불러오는데 실패했습니다')
+    }
+  }, [selectedCategory, searchQuery])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories')
+      if (!response.ok) throw new Error('카테고리를 불러오는데 실패했습니다')
+      const data = await response.json()
+      setCategories(data)
+    } catch (err) {
+      console.error('카테고리 로드 실패:', err)
     }
   }
 
-  const handleReject = (postId: string) => {
+  const fetchTodayStats = async () => {
+    try {
+      const response = await fetch('/api/admin/posts/stats')
+      if (!response.ok) throw new Error('통계를 불러오는데 실패했습니다')
+      const data = await response.json()
+      setTodayStats(data.today || { approved: 0, rejected: 0 })
+    } catch (err) {
+      console.error('통계 로드 실패:', err)
+    }
+  }
+
+  // 검색어나 카테고리 변경 시 다시 로드
+  useEffect(() => {
+    if (!loading && currentUser) {
+      fetchPendingPosts()
+    }
+  }, [searchQuery, selectedCategory, loading, currentUser, fetchPendingPosts])
+
+  const handleApprove = async (postId: string) => {
+    if (!confirm('이 게시글을 승인하시겠습니까?')) return
+
+    setApproving(postId)
+    try {
+      const response = await fetch(`/api/admin/posts/${postId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '게시글 승인에 실패했습니다')
+      }
+
+      // 승인된 게시글을 목록에서 제거
+      setPosts(prev => prev.filter(post => post.id !== postId))
+      setTodayStats(prev => ({ ...prev, approved: prev.approved + 1 }))
+      
+      alert('게시글이 승인되었습니다.')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '게시글 승인에 실패했습니다')
+    } finally {
+      setApproving(null)
+    }
+  }
+
+  const handleReject = async (postId: string) => {
     if (!rejectionReason.trim()) {
       alert('거부 사유를 입력해주세요.')
       return
     }
 
-    setPosts(posts.filter(post => post.id !== postId))
-    setIsRejectDialogOpen(false)
-    setRejectionReason('')
-    // TODO: 실제 거부 처리 로직
-    alert('게시글이 거부되었습니다.')
+    setRejecting(postId)
+    try {
+      const response = await fetch(`/api/admin/posts/${postId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: rejectionReason })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '게시글 거부에 실패했습니다')
+      }
+
+      // 거부된 게시글을 목록에서 제거
+      setPosts(prev => prev.filter(post => post.id !== postId))
+      setTodayStats(prev => ({ ...prev, rejected: prev.rejected + 1 }))
+      
+      setIsRejectDialogOpen(false)
+      setRejectionReason('')
+      alert('게시글이 거부되었습니다.')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '게시글 거부에 실패했습니다')
+    } finally {
+      setRejecting(null)
+    }
   }
 
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.author.username.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || post.category.id === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  // 로딩 상태
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">관리자 페이지를 불러오는 중...</span>
+      </div>
+    )
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-red-500 mb-4">{error}</p>
+        <div className="space-x-2">
+          <Button onClick={() => window.location.reload()}>
+            다시 시도
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/">홈으로</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -152,13 +297,11 @@ export default function PendingPostsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="project">프로젝트</SelectItem>
-                <SelectItem value="tech">기술</SelectItem>
-                <SelectItem value="news">뉴스</SelectItem>
-                <SelectItem value="qna">질문</SelectItem>
-                <SelectItem value="tutorial">튜토리얼</SelectItem>
-                <SelectItem value="career">취업</SelectItem>
-                <SelectItem value="general">일반</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -180,7 +323,7 @@ export default function PendingPostsPage() {
           <CardContent className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm text-muted-foreground">오늘 승인</p>
-              <p className="text-2xl font-bold">12</p>
+              <p className="text-2xl font-bold">{todayStats.approved}</p>
             </div>
             <Check className="h-8 w-8 text-green-500" />
           </CardContent>
@@ -189,7 +332,7 @@ export default function PendingPostsPage() {
           <CardContent className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm text-muted-foreground">오늘 거부</p>
-              <p className="text-2xl font-bold">3</p>
+              <p className="text-2xl font-bold">{todayStats.rejected}</p>
             </div>
             <XIcon className="h-8 w-8 text-red-500" />
           </CardContent>
@@ -198,7 +341,7 @@ export default function PendingPostsPage() {
 
       {/* 게시글 목록 */}
       <div className="space-y-4">
-        {filteredPosts.length === 0 ? (
+        {posts.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileText className="h-12 w-12 text-muted-foreground mb-4" />
@@ -208,7 +351,7 @@ export default function PendingPostsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredPosts.map((post) => (
+          posts.map((post) => (
             <Card key={post.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -278,9 +421,14 @@ export default function PendingPostsPage() {
                   variant="default" 
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => handleApprove(post.id)}
+                  disabled={approving === post.id || rejecting === post.id}
                 >
-                  <Check className="mr-2 h-4 w-4" />
-                  승인
+                  {approving === post.id ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  {approving === post.id ? '승인 중...' : '승인'}
                 </Button>
 
                 <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
@@ -291,9 +439,14 @@ export default function PendingPostsPage() {
                         setSelectedPost(post)
                         setIsRejectDialogOpen(true)
                       }}
+                      disabled={approving === post.id || rejecting === post.id}
                     >
-                      <XIcon className="mr-2 h-4 w-4" />
-                      거부
+                      {rejecting === post.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <XIcon className="mr-2 h-4 w-4" />
+                      )}
+                      {rejecting === post.id ? '거부 중...' : '거부'}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>

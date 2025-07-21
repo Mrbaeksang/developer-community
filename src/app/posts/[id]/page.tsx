@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
+import { PostCardSkeleton } from '@/components/ui/skeleton'
+import { OptimizedAvatar } from '@/components/ui/optimized-image'
+import { useCurrentUser, usePost, usePostComments, useLikePost, useAddComment } from '@/hooks/use-api'
 import { 
   ArrowLeft, 
   Eye, 
@@ -21,7 +23,9 @@ import {
   Edit,
   Trash2,
   MoreVertical,
-  Send
+  Send,
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -31,155 +35,79 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-// 임시 데이터
-const post = {
-  id: '1',
-  title: 'Next.js 14와 Server Actions로 풀스택 앱 만들기',
-  content: `# Next.js 14와 Server Actions로 풀스택 앱 만들기
-
-최신 Next.js 14 버전에서 도입된 Server Actions는 풀스택 개발의 패러다임을 완전히 바꾸고 있습니다. 이 글에서는 Server Actions를 활용하여 효율적인 풀스택 애플리케이션을 구축하는 방법을 알아보겠습니다.
-
-## Server Actions란?
-
-Server Actions는 클라이언트에서 직접 호출할 수 있는 서버 측 함수입니다. 이를 통해 별도의 API 엔드포인트를 만들지 않고도 서버와 통신할 수 있습니다.
-
-\`\`\`typescript
-async function createPost(formData: FormData) {
-  'use server'
-  
-  const title = formData.get('title')
-  const content = formData.get('content')
-  
-  // 데이터베이스에 저장
-  await db.post.create({
-    data: { title, content }
-  })
-  
-  revalidatePath('/posts')
-}
-\`\`\`
-
-## 주요 장점
-
-1. **간편한 구현**: API 라우트를 별도로 만들 필요가 없습니다.
-2. **타입 안정성**: TypeScript와 완벽하게 통합됩니다.
-3. **보안**: 서버에서만 실행되므로 민감한 로직을 안전하게 처리할 수 있습니다.
-4. **성능**: 불필요한 클라이언트-서버 왕복을 줄입니다.
-
-## 실전 예제
-
-다음은 간단한 할 일 목록 앱을 Server Actions로 구현한 예제입니다:
-
-\`\`\`tsx
-// app/todos/page.tsx
-import { createTodo, deleteTodo } from './actions'
-
-export default async function TodosPage() {
-  const todos = await getTodos()
-  
-  return (
-    <div>
-      <form action={createTodo}>
-        <input name="title" placeholder="새 할 일" required />
-        <button type="submit">추가</button>
-      </form>
-      
-      <ul>
-        {todos.map(todo => (
-          <li key={todo.id}>
-            {todo.title}
-            <form action={deleteTodo.bind(null, todo.id)}>
-              <button type="submit">삭제</button>
-            </form>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-\`\`\`
-
-## 주의사항
-
-- Server Actions는 반드시 async 함수여야 합니다.
-- 'use server' 지시문을 파일 상단이나 함수 내부에 명시해야 합니다.
-- 클라이언트 컴포넌트에서는 별도 파일에서 import해서 사용해야 합니다.
-
-## 마무리
-
-Server Actions는 Next.js 14의 가장 혁신적인 기능 중 하나입니다. 이를 통해 더 간단하고 효율적인 풀스택 애플리케이션을 구축할 수 있습니다. 특히 폼 처리나 데이터 변경 작업에서 그 진가를 발휘합니다.
-
-여러분도 다음 프로젝트에서 Server Actions를 활용해보시기 바랍니다!`,
-  excerpt: '최신 Next.js 기능을 활용한 실전 프로젝트 구축 가이드입니다.',
-  author: { 
-    id: '1', 
-    username: 'devmaster', 
-    avatar_url: null,
-    bio: '10년차 풀스택 개발자입니다. React와 Next.js를 주로 다룹니다.'
-  },
-  category: { id: 'tech', name: '기술', slug: 'tech', color: '#10B981' },
-  status: 'approved',
-  view_count: 1542,
-  like_count: 89,
-  comment_count: 23,
-  is_liked: false,
-  tags: ['Next.js', 'React', 'TypeScript', 'Server Actions'],
-  created_at: '2025-01-18T10:00:00Z',
-  updated_at: '2025-01-18T10:00:00Z'
+// 타입 정의
+interface Category {
+  id: string
+  name: string
+  slug: string
+  color: string
 }
 
-const comments = [
-  {
-    id: '1',
-    post_id: '1',
-    author: {
-      id: '2',
-      username: 'react_lover',
-      avatar_url: null
-    },
-    content: '정말 유용한 글이네요! Server Actions 덕분에 개발이 훨씬 편해졌어요.',
-    created_at: '2025-01-18T12:30:00Z'
-  },
-  {
-    id: '2',
-    post_id: '1',
-    author: {
-      id: '3',
-      username: 'backend_dev',
-      avatar_url: null
-    },
-    content: '타입 안정성 부분이 특히 마음에 드네요. API 스키마 관리가 힘들었는데 이제 해결됐습니다.',
-    created_at: '2025-01-18T14:15:00Z'
-  },
-  {
-    id: '3',
-    post_id: '1',
-    author: {
-      id: '4',
-      username: 'junior_coder',
-      avatar_url: null
-    },
-    content: '초보자도 이해하기 쉽게 설명해주셔서 감사합니다! 예제 코드가 특히 도움이 됐어요.',
-    created_at: '2025-01-19T09:45:00Z'
-  }
-]
+interface Author {
+  id: string
+  username: string
+  avatar_url: string | null
+  bio?: string
+}
 
-// 현재 사용자 (임시)
-const currentUser = { id: '1', username: 'devmaster' }
+interface Post {
+  id: string
+  title: string
+  content: string
+  excerpt: string
+  author: Author
+  category: Category
+  status: string
+  view_count: number
+  like_count: number
+  comment_count: number
+  is_liked: boolean
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
 
-export default function PostDetailPage({ params }: { params: { id: string } }) {
+interface Comment {
+  id: string
+  post_id: string
+  author: Author
+  content: string
+  created_at: string
+}
+
+
+export default function PostDetailPage() {
   const router = useRouter()
-  const [isLiked, setIsLiked] = useState(post.is_liked)
-  const [likeCount, setLikeCount] = useState(post.like_count)
+  const params = useParams()
+  const id = params.id as string
+  
   const [commentText, setCommentText] = useState('')
-  const [commentsList, setCommentsList] = useState(comments)
+  
+  // React Query 훅들 사용
+  const { data: currentUser } = useCurrentUser()
+  const { data: post, isLoading: postLoading, error: postError } = usePost(id)
+  const { data: comments = [], isLoading: commentsLoading } = usePostComments(id)
+  
+  // Mutations
+  const likePostMutation = useLikePost()
+  const addCommentMutation = useAddComment()
 
-  const handleLike = () => {
-    setIsLiked(!isLiked)
-    setLikeCount(isLiked ? likeCount - 1 : likeCount + 1)
+  const handleLike = async () => {
+    if (!post || !currentUser) return
+
+    try {
+      await likePostMutation.mutateAsync({
+        postId: id,
+        action: post.is_liked ? 'unlike' : 'like'
+      })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '좋아요 처리에 실패했습니다')
+    }
   }
 
   const handleShare = () => {
+    if (!post) return
+    
     if (navigator.share) {
       navigator.share({
         title: post.title,
@@ -192,30 +120,165 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
     }
   }
 
-  const handleComment = (e: React.FormEvent) => {
+  const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!commentText.trim()) return
+    if (!commentText.trim() || !currentUser || addCommentMutation.isPending) return
 
-    const newComment = {
-      id: String(Date.now()),
-      post_id: post.id,
-      author: currentUser,
-      content: commentText,
-      created_at: new Date().toISOString()
+    try {
+      await addCommentMutation.mutateAsync({
+        postId: id,
+        content: commentText
+      })
+      setCommentText('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '댓글 작성에 실패했습니다')
     }
-
-    setCommentsList([...commentsList, newComment])
-    setCommentText('')
   }
 
-  const handleDelete = () => {
-    if (confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
-      // TODO: 삭제 로직
+  const handleDelete = async () => {
+    if (!post || !confirm('정말로 이 게시글을 삭제하시겠습니까?')) return
+
+    try {
+      const response = await fetch(`/api/posts/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) throw new Error('게시글 삭제에 실패했습니다')
+
       router.push('/posts')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '게시글 삭제에 실패했습니다')
     }
   }
 
-  const isAuthor = currentUser.id === post.author.id
+  const isAuthor = currentUser && post && currentUser.id === post.author.id
+
+  // 로딩 상태 - 스켈레톤 사용
+  if (postLoading) {
+    return (
+      <div className="container max-w-4xl py-8">
+        {/* 뒤로가기 버튼 스켈레톤 */}
+        <div className="mb-6">
+          <div className="h-9 w-32 bg-muted animate-pulse rounded" />
+        </div>
+
+        {/* 게시글 스켈레톤 */}
+        <div className="space-y-8">
+          <Card>
+            <CardHeader>
+              <div className="space-y-4">
+                {/* 카테고리 및 메타 정보 스켈레톤 */}
+                <div className="flex items-center gap-3">
+                  <div className="h-6 w-16 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+                </div>
+                {/* 제목 스켈레톤 */}
+                <div className="h-8 bg-muted animate-pulse rounded w-3/4" />
+                {/* 작성자 정보 스켈레톤 */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-muted animate-pulse rounded-full" />
+                    <div className="space-y-1">
+                      <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                      <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+                    </div>
+                  </div>
+                  <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                </div>
+              </div>
+            </CardHeader>
+            <Separator />
+            <CardContent className="py-8">
+              <div className="space-y-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-4 bg-muted animate-pulse rounded w-full" />
+                ))}
+                <div className="h-4 bg-muted animate-pulse rounded w-2/3" />
+              </div>
+            </CardContent>
+            <Separator />
+            <CardFooter>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex gap-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-4 w-12 bg-muted animate-pulse rounded" />
+                  ))}
+                </div>
+                <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+              </div>
+            </CardFooter>
+          </Card>
+
+          {/* 댓글 섹션 스켈레톤 */}
+          <Card>
+            <CardHeader>
+              <div className="h-6 w-24 bg-muted animate-pulse rounded" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="h-24 bg-muted animate-pulse rounded" />
+                  <div className="h-8 w-20 bg-muted animate-pulse rounded ml-auto" />
+                </div>
+                <Separator />
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="h-8 w-8 bg-muted animate-pulse rounded-full" />
+                    <div className="space-y-2 flex-1">
+                      <div className="flex gap-2">
+                        <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+                        <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                      </div>
+                      <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+                      <div className="h-4 bg-muted animate-pulse rounded w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // 에러 상태
+  if (postError) {
+    return (
+      <div className="container max-w-4xl py-8">
+        <div className="text-center py-16">
+          <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">게시글을 불러올 수 없습니다</h2>
+          <p className="text-muted-foreground mb-4">
+            {postError instanceof Error ? postError.message : '게시글을 불러오는데 실패했습니다'}
+          </p>
+          <div className="space-x-2">
+            <Button onClick={() => window.location.reload()}>
+              다시 시도
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">홈으로</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 게시글이 없는 경우
+  if (!post) {
+    return (
+      <div className="container max-w-4xl py-8">
+        <div className="text-center py-16">
+          <p className="text-muted-foreground mb-4">게시글을 찾을 수 없습니다</p>
+          <Button asChild>
+            <Link href="/posts">게시글 목록으로</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-4xl py-8">
@@ -260,15 +323,14 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
             {/* 작성자 정보 */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={post.author.avatar_url || undefined} />
-                  <AvatarFallback>{post.author.username[0].toUpperCase()}</AvatarFallback>
-                </Avatar>
+                <OptimizedAvatar 
+                  src={post.author.avatar_url}
+                  alt={post.author.username || post.author.full_name || ''}
+                  size="md"
+                />
                 <div>
-                  <p className="font-medium">{post.author.username}</p>
-                  {post.author.bio && (
-                    <p className="text-sm text-muted-foreground">{post.author.bio}</p>
-                  )}
+                  <p className="font-medium">{post.author.full_name || post.author.username}</p>
+                  <p className="text-sm text-muted-foreground">{post.author.role}</p>
                 </div>
               </div>
 
@@ -282,9 +344,11 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 <DropdownMenuContent align="end">
                   {isAuthor ? (
                     <>
-                      <DropdownMenuItem>
-                        <Edit className="mr-2 h-4 w-4" />
-                        수정
+                      <DropdownMenuItem asChild>
+                        <Link href={`/posts/${id}/edit`}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          수정
+                        </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -334,15 +398,15 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
               <button 
                 onClick={handleLike}
                 className={`flex items-center gap-1 hover:text-foreground transition-colors ${
-                  isLiked ? 'text-red-500' : ''
+                  post.is_liked ? 'text-red-500' : ''
                 }`}
               >
-                <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-                {likeCount}
+                <Heart className={`h-4 w-4 ${post.is_liked ? 'fill-current' : ''}`} />
+                {post.like_count}
               </button>
               <span className="flex items-center gap-1">
                 <MessageCircle className="h-4 w-4" />
-                {commentsList.length}
+                {comments.length}
               </span>
             </div>
             <Button variant="ghost" size="sm" onClick={handleShare}>
@@ -354,41 +418,55 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
         {/* 댓글 섹션 */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>댓글 {commentsList.length}개</CardTitle>
+            <CardTitle>댓글 {comments.length}개</CardTitle>
           </CardHeader>
           <CardContent>
             {/* 댓글 작성 폼 */}
-            <form onSubmit={handleComment} className="mb-6">
-              <Textarea
-                placeholder="댓글을 작성하세요..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                rows={3}
-                className="mb-3"
-              />
-              <div className="flex justify-end">
-                <Button type="submit" size="sm">
-                  <Send className="mr-2 h-4 w-4" />
-                  댓글 작성
+            {currentUser ? (
+              <form onSubmit={handleComment} className="mb-6">
+                <Textarea
+                  placeholder="댓글을 작성하세요..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  rows={3}
+                  className="mb-3"
+                />
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" disabled={addCommentMutation.isPending}>
+                    {addCommentMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    댓글 작성
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="text-center py-4 mb-6 border border-dashed rounded-lg">
+                <p className="text-muted-foreground mb-2">로그인하면 댓글을 작성할 수 있습니다</p>
+                <Button asChild size="sm">
+                  <Link href="/auth/login">로그인</Link>
                 </Button>
               </div>
-            </form>
+            )}
 
             <Separator className="mb-6" />
 
             {/* 댓글 목록 */}
             <div className="space-y-6">
-              {commentsList.length === 0 ? (
+              {comments.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   첫 댓글을 작성해보세요!
                 </p>
               ) : (
-                commentsList.map((comment) => (
+                comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={comment.author.avatar_url || undefined} />
-                      <AvatarFallback>{comment.author.username[0].toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                    <OptimizedAvatar 
+                      src={comment.author.avatar_url}
+                      alt={comment.author.username || comment.author.full_name || ''}
+                      size="sm"
+                    />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">{comment.author.username}</span>

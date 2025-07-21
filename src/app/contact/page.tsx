@@ -21,15 +21,29 @@ export default function ContactPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // TODO: 실제 문의 전송 로직
-    console.log('문의 내용:', formData)
-    
-    // 임시로 성공 메시지
-    setTimeout(() => {
-      alert('문의가 성공적으로 전송되었습니다!')
-      setFormData({ name: '', email: '', subject: '', message: '' })
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(result.message || '문의가 성공적으로 전송되었습니다!')
+        setFormData({ name: '', email: '', subject: '', message: '' })
+      } else {
+        alert(result.error || '문의 전송에 실패했습니다.')
+      }
+    } catch (error) {
+      // 문의 전송 오류 처리
+      alert('문의 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+    } finally {
       setIsSubmitting(false)
-    }, 1000)
+    }
   }
 
   return (
@@ -102,7 +116,7 @@ export default function ContactPage() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="hong@example.com"
+                      placeholder="your@email.com"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required

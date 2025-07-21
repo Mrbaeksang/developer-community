@@ -1,0 +1,69 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "Dev Community":
+    - /url: /
+  - navigation:
+    - link "게시글":
+      - /url: /posts
+    - link "커뮤니티":
+      - /url: /communities
+  - link "로그인":
+    - /url: /auth/login
+  - link "회원가입":
+    - /url: /auth/signup
+- heading "개발자 커뮤니티" [level=1]
+- paragraph: 지식을 공유하고, 함께 성장하는 개발자들의 공간
+- textbox "관심있는 주제를 검색해보세요..."
+- link "글쓰기":
+  - /url: /posts/write
+- button "전체"
+- button "프로젝트"
+- button "기술"
+- button "뉴스"
+- button "질문"
+- button "튜토리얼"
+- button "취업"
+- heading "인기 게시글" [level=2]
+- heading "Next.js 14와 Server Actions로 풀스택 앱 만들기" [level=3]:
+  - link "Next.js 14와 Server Actions로 풀스택 앱 만들기":
+    - /url: /posts/1
+- paragraph: 최신 Next.js 기능을 활용한 실전 프로젝트 구축 가이드입니다. Server Actions와 App Router를 중심으로 설명합니다.
+- text: 기술 1,542 89 23 devmaster · 2025. 1. 18.
+- heading "AI 스타트업이 투자받는 방법" [level=3]:
+  - link "AI 스타트업이 투자받는 방법":
+    - /url: /posts/2
+- paragraph: 실리콘밸리에서 AI 스타트업을 운영하며 배운 투자 유치 노하우를 공유합니다.
+- text: 뉴스 2,103 156 45 startup_founder · 2025. 1. 17.
+- heading "최신 게시글" [level=2]
+- heading "React 19의 새로운 기능들" [level=3]:
+  - link "React 19의 새로운 기능들":
+    - /url: /posts/3
+- paragraph: React 19에서 추가된 주요 기능들과 변경사항을 정리했습니다.
+- text: 기술 432 28 12 react_lover · 2025. 1. 20.
+- heading "주니어 개발자 면접 준비 가이드" [level=3]:
+  - link "주니어 개발자 면접 준비 가이드":
+    - /url: /posts/4
+- paragraph: 주니어 백엔드 개발자 면접을 준비하는 분들을 위한 체크리스트입니다.
+- text: 취업 891 67 34 job_seeker · 2025. 1. 20.
+- heading "Docker Compose로 개발 환경 구축하기" [level=3]:
+  - link "Docker Compose로 개발 환경 구축하기":
+    - /url: /posts/5
+- paragraph: 로컬 개발 환경을 Docker Compose로 통일하는 방법을 소개합니다.
+- text: 튜토리얼 567 45 19 docker_pro · 2025. 1. 19.
+- button "더 많은 게시글 보기"
+- complementary:
+  - heading "커뮤니티 소개" [level=3]
+  - paragraph: 개발자들이 지식을 공유하고 함께 성장하는 공간입니다. 프로젝트, 기술 트렌드, 커리어 등 다양한 주제로 소통해보세요.
+  - text: 전체 회원 1,234명 전체 게시글 567개 활성 커뮤니티 23개
+  - link "커뮤니티 둘러보기":
+    - /url: /communities
+  - heading "인기 태그" [level=3]
+  - text: "#React #Next.js #TypeScript #Node.js #Python #AI #DevOps #Docker #면접 #알고리즘"
+  - heading "첫 글을 작성해보세요!" [level=3]
+  - paragraph: 여러분의 지식과 경험을 공유해주세요. 작성하신 글은 관리자 검토 후 게시됩니다.
+  - link "글쓰기":
+    - /url: /posts/write
+- alert
+```

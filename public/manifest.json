@@ -1,0 +1,108 @@
+{
+  "name": "Developer Community",
+  "short_name": "DevCommunity",
+  "description": "개발자 커뮤니티 - AI 뉴스, 기술 트렌드, 부트캠프 협업 플랫폼",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity", "social"],
+  "lang": "ko",
+  "dir": "ltr",
+  "scope": "/",
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "홈페이지 - 데스크톱"
+    },
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "홈페이지 - 모바일"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "새 글 작성",
+      "short_name": "글쓰기",
+      "description": "새로운 게시글을 작성합니다",
+      "url": "/posts/write",
+      "icons": [
+        {
+          "src": "/icons/shortcut-write.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "커뮤니티",
+      "short_name": "커뮤니티",
+      "description": "개발자 커뮤니티를 둘러봅니다",
+      "url": "/communities",
+      "icons": [
+        {
+          "src": "/icons/shortcut-community.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}
