@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { sanitizeAndFormatContent } from '@/lib/sanitize'
 import {
   Select,
   SelectContent,
@@ -113,7 +114,7 @@ export default function PendingPostsPage() {
         // 대기 중인 게시글 로드
         await fetchPendingPosts()
         
-        // 카테고리 데이터 로드
+        // 카테고리 데이터 로드 (board_types 구조 반영)
         await fetchCategories()
         
         // 오늘 통계 로드
@@ -126,6 +127,7 @@ export default function PendingPostsPage() {
     }
 
     initializePage()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const fetchPendingPosts = useCallback(async () => {
@@ -155,6 +157,7 @@ export default function PendingPostsPage() {
 
   const fetchCategories = async () => {
     try {
+      // board_types를 통해 카테고리 가져오기
       const response = await fetch('/api/categories')
       if (!response.ok) throw new Error('카테고리를 불러오는데 실패했습니다')
       const data = await response.json()
@@ -410,7 +413,7 @@ export default function PendingPostsPage() {
                     <div className="mt-4">
                       <div className="prose prose-sm max-w-none">
                         <div dangerouslySetInnerHTML={{ 
-                          __html: selectedPost?.content.replace(/\n/g, '<br />') || '' 
+                          __html: sanitizeAndFormatContent(selectedPost?.content || '') 
                         }} />
                       </div>
                     </div>

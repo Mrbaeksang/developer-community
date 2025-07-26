@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, validateUUID, sanitizeInput } from '@/lib/security'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -33,6 +38,14 @@ export async function GET(
 
     const { id } = await params
 
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     // 커뮤니티 기본 정보 조회
     const { data: community, error: communityError } = await supabase
       .from('communities')
@@ -49,7 +62,7 @@ export async function GET(
         created_by,
         created_at,
         updated_at,
-        profiles!created_by (
+        profiles!communities_created_by_fkey (
           id,
           username,
           display_name,
@@ -84,7 +97,7 @@ export async function GET(
         user_id,
         role,
         joined_at,
-        profiles!user_id (
+        profiles!community_members_user_id_fkey (
           id,
           username,
           display_name,
@@ -161,6 +174,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -195,8 +212,36 @@ export async function PUT(
     }
 
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { name, description, tags, max_members } = body
+
+    // Input validation
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: '커뮤니티 이름은 필수입니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (max_members && (max_members < 2 || max_members > 10)) {
+      return NextResponse.json(
+        { error: '최대 인원은 2-10명이어야 합니다.' },
+        { status: 400 }
+      )
+    }
+
+    // Input sanitization
+    const sanitizedName = sanitizeInput(name)
+    const sanitizedDescription = description ? sanitizeInput(description) : null
 
     // 권한 확인 (소유자 또는 관리자인지 확인)
     const { data: membership } = await supabase
@@ -225,10 +270,10 @@ export async function PUT(
     const { data: updatedCommunity, error } = await supabase
       .from('communities')
       .update({
-        name: name?.trim(),
-        description: description?.trim(),
-        tags: tags || [],
-        max_members: max_members || 100,
+        name: sanitizedName.trim(),
+        description: sanitizedDescription?.trim() || null,
+        tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
+        max_members: max_members || 5,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)

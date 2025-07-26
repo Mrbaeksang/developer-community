@@ -9,12 +9,10 @@ import { Button } from './button'
 import { TechStack } from './tech-badge'
 import { Avatar, AvatarFallback, AvatarImage } from './avatar'
 import { 
-  ExternalLink, 
   Github, 
   Star, 
   GitFork, 
   Eye,
-  Calendar,
   Users,
   Play,
   Code,
@@ -271,13 +269,13 @@ export function ProjectShowcaseCard({
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
               <Avatar className="h-6 w-6">
-                <AvatarImage src={project.author.avatar_url} />
+                <AvatarImage src={project.author?.avatar_url || undefined} />
                 <AvatarFallback className="text-xs">
-                  {project.author.username[0].toUpperCase()}
+                  {project.author?.username?.[0]?.toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium">
-                {project.author.displayName || project.author.username}
+                {project.author?.displayName || project.author?.username || 'Unknown'}
               </span>
               
               {/* 협업자 표시 */}

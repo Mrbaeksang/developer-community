@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, sanitizeInput, validateUUID } from '@/lib/security'
 
 interface Params {
   id: string
@@ -10,11 +11,24 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100) // Max 100
     const offset = (page - 1) * limit
 
     const cookieStore = await cookies()
@@ -62,10 +76,10 @@ export async function GET(
       )
     }
 
-    // 승인된 게시글의 댓글만 조회 가능
-    if (post.status !== 'approved') {
+    // 공개된 게시글의 댓글만 조회 가능
+    if (post.status !== 'published') {
       return NextResponse.json(
-        { error: '승인된 게시글의 댓글만 조회할 수 있습니다.' },
+        { error: '공개된 게시글의 댓글만 조회할 수 있습니다.' },
         { status: 403 }
       )
     }
@@ -79,10 +93,11 @@ export async function GET(
         created_at,
         updated_at,
         author_id,
-        profiles!post_comments_author_id_fkey (
+        profiles!inner (
           id,
           username,
-          display_name
+          display_name,
+          avatar_url
         )
       `)
       .eq('post_id', id)
@@ -107,8 +122,28 @@ export async function GET(
       console.error('댓글 개수 조회 에러:', countError)
     }
 
+    // 작성자 정보는 이미 조인으로 가져왔음
+    
+    // 댓글 데이터를 PostDetailPage가 기대하는 형식으로 변환
+    const formattedComments = comments?.map(comment => {
+      const profile = (comment as Record<string, unknown>).profiles as { id: string; username: string | null; display_name: string | null; avatar_url: string | null } | undefined
+      return {
+        id: comment.id,
+        content: comment.content,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        author_id: comment.author_id,
+        author: {
+          id: comment.author_id,
+          username: profile?.username || 'Unknown',
+          display_name: profile?.display_name,
+          avatar_url: profile?.avatar_url
+        }
+      }
+    }) || []
+
     return NextResponse.json({
-      comments,
+      comments: formattedComments,
       pagination: {
         page,
         limit,
@@ -129,8 +164,20 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -187,10 +234,10 @@ export async function POST(
       )
     }
 
-    // 승인된 게시글만 댓글 작성 가능
-    if (post.status !== 'approved') {
+    // 공개된 게시글만 댓글 작성 가능
+    if (post.status !== 'published') {
       return NextResponse.json(
-        { error: '승인된 게시글만 댓글을 작성할 수 있습니다.' },
+        { error: '공개된 게시글만 댓글을 작성할 수 있습니다.' },
         { status: 403 }
       )
     }
@@ -206,13 +253,16 @@ export async function POST(
       )
     }
 
+    // Input sanitization
+    const sanitizedContent = sanitizeInput(content)
+
     // 댓글 생성
     const { data: comment, error } = await supabase
       .from('post_comments')
       .insert({
         post_id: id,
         author_id: session.user.id,
-        content: content.trim()
+        content: sanitizedContent.trim()
       })
       .select(`
         id,
@@ -220,10 +270,11 @@ export async function POST(
         created_at,
         updated_at,
         author_id,
-        profiles!post_comments_author_id_fkey (
+        profiles!inner (
           id,
           username,
-          display_name
+          display_name,
+          avatar_url
         )
       `)
       .single()
@@ -236,7 +287,37 @@ export async function POST(
       )
     }
 
-    return NextResponse.json({ comment }, { status: 201 })
+    // 게시글의 댓글 수 증가
+    const { data: currentPost } = await supabase
+      .from('posts')
+      .select('comment_count')
+      .eq('id', id)
+      .single()
+
+    if (currentPost) {
+      await supabase
+        .from('posts')
+        .update({ comment_count: (currentPost.comment_count || 0) + 1 })
+        .eq('id', id)
+    }
+
+    // 댓글 데이터 포맷팅
+    const profile = (comment as Record<string, unknown>).profiles as { id: string; username: string | null; display_name: string | null; avatar_url: string | null } | undefined
+    const formattedComment = {
+      id: comment.id,
+      content: comment.content,
+      created_at: comment.created_at,
+      updated_at: comment.updated_at,
+      author_id: comment.author_id,
+      author: {
+        id: comment.author_id,
+        username: profile?.username || 'Unknown',
+        display_name: profile?.display_name,
+        avatar_url: profile?.avatar_url
+      }
+    }
+
+    return NextResponse.json({ comment: formattedComment }, { status: 201 })
   } catch (error) {
     console.error('댓글 작성 예외:', error)
     return NextResponse.json(

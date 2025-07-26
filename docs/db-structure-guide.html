@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개발자 커뮤니티 DB 구조 - 초보자 가이드</title>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f4f8;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+        
+        /* 섹션 스타일 */
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .section-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .section-icon {
+            font-size: 28px;
+        }
+        
+        /* 테이블 박스 스타일 */
+        .table-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #ecf0f1 100%);
+            border: 2px solid #3498db;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px;
+            display: inline-block;
+            min-width: 280px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .table-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-color: #2980b9;
+        }
+        .table-name {
+            font-weight: bold;
+            color: #2980b9;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .table-icon {
+            font-size: 20px;
+        }
+        
+        /* 필드 스타일 */
+        .field {
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255,255,255,0.7);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .field-name {
+            font-weight: 600;
+            color: #34495e;
+        }
+        .field-desc {
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .pk {
+            color: #e74c3c;
+            font-weight: bold;
+            background: #fee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .fk {
+            color: #27ae60;
+            font-weight: bold;
+            background: #efe;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
+        /* 관계 화살표 */
+        .arrow {
+            display: inline-block;
+            margin: 0 20px;
+            font-size: 30px;
+            color: #95a5a6;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        
+        /* 플로우 레이아웃 */
+        .flow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        /* 설명 박스 */
+        .description {
+            background: #e8f4fd;
+            border-left: 6px solid #3498db;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 0 12px 12px 0;
+            font-size: 15px;
+        }
+        .description strong {
+            color: #2980b9;
+            font-size: 16px;
+        }
+        
+        /* 핵심 개념 설명 */
+        .concept-box {
+            background: #fff9e6;
+            border: 2px solid #f1c40f;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .concept-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #f39c12;
+            margin-bottom: 15px;
+        }
+        .concept-item {
+            margin: 12px 0;
+            padding-left: 20px;
+        }
+        
+        /* 초보자 팁 */
+        .tip-box {
+            background: #e8f8f5;
+            border: 2px solid #16a085;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .tip-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #16a085;
+            margin-bottom: 10px;
+        }
+        
+        /* 예시 코드 */
+        .code-example {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .comment {
+            color: #95a5a6;
+            font-style: italic;
+        }
+        
+        /* 스페셜 하이라이트 */
+        .highlight {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+        .highlight h3 {
+            color: #f39c12;
+            margin-bottom: 15px;
+        }
+        
+        /* 관계 타입 설명 */
+        .relation-type {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+        .one-to-one {
+            background: #e8f4fd;
+            color: #3498db;
+        }
+        .one-to-many {
+            background: #e8f8f5;
+            color: #16a085;
+        }
+        .many-to-many {
+            background: #fef5e7;
+            color: #f39c12;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ 개발자 커뮤니티 데이터베이스 구조</h1>
+        <p class="subtitle">코딩 초보자도 이해할 수 있는 상세 가이드</p>
+        
+        <!-- DB 기초 개념 설명 -->
+        <div class="concept-box">
+            <div class="concept-title">💡 먼저 알아두면 좋은 기본 개념</div>
+            <div class="concept-item">
+                <strong>📌 테이블(Table)</strong>: 엑셀의 시트와 같아요. 데이터를 저장하는 표입니다.
+            </div>
+            <div class="concept-item">
+                <strong>🔑 PK (Primary Key)</strong>: 각 데이터를 구별하는 고유한 번호예요. 주민등록번호 같은 거죠!
+            </div>
+            <div class="concept-item">
+                <strong>🔗 FK (Foreign Key)</strong>: 다른 테이블과 연결하는 다리 역할을 해요. "이 사람이 쓴 글"처럼 관계를 만들어줍니다.
+            </div>
+            <div class="concept-item">
+                <strong>↔️ 관계(Relationship)</strong>: 
+                <span class="relation-type one-to-one">1:1 관계</span> (한 사람 - 한 프로필)
+                <span class="relation-type one-to-many">1:N 관계</span> (한 사람 - 여러 게시글)
+                <span class="relation-type many-to-many">N:N 관계</span> (여러 사람 - 여러 커뮤니티)
+            </div>
+        </div>
+
+        <!-- 사용자 관리 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">👤</span>
+                사용자 관리 시스템
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">🔐</span> auth.users
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span>
+                        <span class="field-desc">← 사용자 고유 번호</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">email</span>
+                        <span class="field-desc">← 로그인할 때 쓰는 이메일</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">password</span>
+                        <span class="field-desc">← 암호화된 비밀번호</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">👨‍💼</span> profiles
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span> <span class="fk">FK</span>
+                        <span class="field-desc">← auth.users의 id와 연결</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">username</span>
+                        <span class="field-desc">← @홍길동 같은 사용자명</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">display_name</span>
+                        <span class="field-desc">← 화면에 보이는 이름</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">bio</span>
+                        <span class="field-desc">← "안녕하세요, 프론트엔드 개발자입니다" 같은 자기소개</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">dicebear_seed</span>
+                        <span class="field-desc">← 다이스베어 아바타 생성 시드</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">role</span>
+                        <span class="field-desc">← user(일반), admin(관리자), moderator(운영자)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="description">
+                <strong>🎯 핵심 포인트:</strong> Supabase Auth가 기본 인증(로그인/로그아웃)을 담당하고, 
+                우리는 profiles 테이블에 추가 정보(닉네임, 프로필 사진 등)를 저장해요.
+            </div>
+            
+            <div class="tip-box">
+                <div class="tip-title">💡 초보자 팁</div>
+                <p>auth.users는 Supabase가 자동으로 관리하는 테이블이에요. 우리가 직접 수정할 수 없어요!</p>
+                <p>profiles 테이블은 우리가 만든 테이블로, 사용자의 추가 정보를 저장합니다.</p>
+            </div>
+        </div>
+
+        <!-- 게시판 시스템 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">📋</span>
+                게시판 시스템 (3단계 구조)
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📚</span> board_types
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">name</span>
+                        <span class="field-desc">← "공식게시판", "자유게시판"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">slug</span>
+                        <span class="field-desc">← URL용 이름 "official", "free"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">requires_approval</span>
+                        <span class="field-desc">← 관리자 승인 필요? true/false</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">icon</span>
+                        <span class="field-desc">← 아이콘 이름 "📰", "💬"</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📁</span> categories
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">board_type_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 게시판에 속하는지</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">name</span>
+                        <span class="field-desc">← "질문답변", "프로젝트" 등</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">color</span>
+                        <span class="field-desc">← 카테고리 색상 "#3498db"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">icon</span>
+                        <span class="field-desc">← 카테고리 아이콘 "❓", "🚀"</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📝</span> posts
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">board_type_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 게시판 종류</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">category_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 카테고리</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">author_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 작성자 (profiles.id)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">title</span>
+                        <span class="field-desc">← 게시글 제목</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 게시글 내용 (마크다운)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">status</span>
+                        <span class="field-desc">← draft(임시), pending(대기), published(게시)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">view_count</span>
+                        <span class="field-desc">← 조회수</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">like_count</span>
+                        <span class="field-desc">← 좋아요 수 (자동 계산)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="description">
+                <strong>🎯 작동 방식:</strong><br>
+                1️⃣ 게시판 타입 선택 (공식/자유)<br>
+                2️⃣ 카테고리 선택 (질문답변, 프로젝트 등)<br>
+                3️⃣ 게시글 작성<br>
+                4️⃣ 공식게시판은 관리자 승인 필요, 자유게시판은 즉시 게시
+            </div>
+            
+            <div class="code-example">
+<span class="comment">// 예시: 자유게시판의 질문답변 카테고리에 글 쓰기</span>
+const post = {
+    board_type_id: "자유게시판의 ID",
+    category_id: "질문답변 카테고리의 ID",
+    author_id: "현재 로그인한 사용자 ID",
+    title: "React Hook 질문이 있습니다",
+    content: "useEffect가 뭔가요?",
+    status: "published"  <span class="comment">// 자유게시판은 바로 게시</span>
+}
+            </div>
+        </div>
+
+        <!-- 게시글 기능 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">💬</span>
+                게시글 관련 기능들
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">💭</span> post_comments
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 게시글의 댓글?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">parent_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 대댓글일 때 부모 댓글 ID</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">author_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 댓글 작성자</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 댓글 내용</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">like_count</span>
+                        <span class="field-desc">← 댓글 좋아요 수 (자동 계산)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">is_deleted</span>
+                        <span class="field-desc">← 삭제됨? (soft delete)</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">👍</span> comment_likes
+                    </div>
+                    <div class="field">
+                        <span class="field-name">comment_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 댓글?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">user_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 누가 좋아요?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">created_at</span>
+                        <span class="field-desc">← 언제 좋아요?</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">❤️</span> post_likes
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 게시글?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">user_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 누가 좋아요?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">created_at</span>
+                        <span class="field-desc">← 언제 좋아요?</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">🔖</span> post_bookmarks
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 북마크한 게시글</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">user_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 북마크한 사용자</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📎</span> post_attachments
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 게시글의 첨부파일?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">file_name</span>
+                        <span class="field-desc">← "screenshot.png"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">file_url</span>
+                        <span class="field-desc">← Supabase Storage URL</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">file_size</span>
+                        <span class="field-desc">← 파일 크기 (bytes, 최대 50MB)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">file_type</span>
+                        <span class="field-desc">← 허용 파일: 이미지, 문서, 아카이브</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tip-box">
+                <div class="tip-title">💡 자동 업데이트 기능</div>
+                <p>• 댓글을 달면 → posts.comment_count가 자동으로 +1</p>
+                <p>• 좋아요를 누르면 → posts.like_count가 자동으로 +1</p>
+                <p>• 댓글에 좋아요를 누르면 → post_comments.like_count가 자동으로 +1</p>
+                <p>• 이런 기능은 데이터베이스 "트리거"가 처리해요!</p>
+            </div>
+        </div>
+
+        <!-- 커뮤니티 시스템 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">👥</span>
+                커뮤니티 시스템 (소규모 그룹)
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">🏘️</span> communities
+                    </div>
+                    <div class="field">
+                        <span class="field-name">id</span> <span class="pk">PK</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">name</span>
+                        <span class="field-desc">← "React 스터디", "프로젝트 팀"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">visibility</span>
+                        <span class="field-desc">← public(공개) / private(비공개)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">max_members</span>
+                        <span class="field-desc">← 최대 인원 (4-5명)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">created_by</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 만든 사람 (자동으로 admin)</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">👨‍👩‍👦</span> community_members
+                    </div>
+                    <div class="field">
+                        <span class="field-name">community_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 커뮤니티?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">user_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 사용자?</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">role</span>
+                        <span class="field-desc">← member / moderator / admin</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">joined_at</span>
+                        <span class="field-desc">← 가입 날짜</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flow" style="margin-top: 30px;">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">✉️</span> community_join_requests
+                    </div>
+                    <div class="field">
+                        <span class="field-name">message</span>
+                        <span class="field-desc">← "저도 참여하고 싶어요!"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">status</span>
+                        <span class="field-desc">← pending / approved / rejected</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">💬</span> community_messages
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 실시간 채팅 메시지</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📋</span> community_memos
+                    </div>
+                    <div class="field">
+                        <span class="field-name">title</span>
+                        <span class="field-desc">← "회의록", "아이디어 정리"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 메모 내용 (마크다운)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">is_pinned</span>
+                        <span class="field-desc">← 상단 고정?</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📁</span> community_files
+                    </div>
+                    <div class="field">
+                        <span class="field-name">file_name</span>
+                        <span class="field-desc">← "프로젝트계획서.pdf"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">category</span>
+                        <span class="field-desc">← "문서", "이미지", "코드"</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="description">
+                <strong>🎯 커뮤니티 흐름:</strong><br>
+                1️⃣ 커뮤니티 생성 (최대 4-5명)<br>
+                2️⃣ 비공개면 가입 신청 → 승인 대기<br>
+                3️⃣ 멤버들끼리 채팅, 메모, 파일 공유<br>
+                4️⃣ 관리자는 멤버 관리, 운영자는 메모/파일 관리
+            </div>
+        </div>
+
+        <!-- 메시징 시스템 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">💬</span>
+                메시징 및 알림 시스템
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">✉️</span> messages
+                    </div>
+                    <div class="field">
+                        <span class="field-name">sender_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 메시지 보낸 사람</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">receiver_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 메시지 받는 사람</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 메시지 내용</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">is_read</span>
+                        <span class="field-desc">← 읽음 여부 (false = 안읽음)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">thread_id</span>
+                        <span class="field-desc">← 대화 그룹 ID (선택사항)</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">🔔</span> notifications
+                    </div>
+                    <div class="field">
+                        <span class="field-name">user_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 알림 받는 사용자</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">type</span>
+                        <span class="field-desc">← post_approved, post_rejected, comment_added, comment_replied, post_liked, comment_liked, message_received, community_invite, community_joined</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">title</span>
+                        <span class="field-desc">← "게시글이 승인되었습니다", "새 댓글이 달렸습니다", "좋아요를 받았습니다"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">message</span>
+                        <span class="field-desc">← 알림 상세 내용 및 관련 컨텍스트</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">related_id</span>
+                        <span class="field-desc">← 관련 게시글/댓글/커뮤니티 ID</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">related_type</span>
+                        <span class="field-desc">← 'post', 'comment', 'message', 'community' 등</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">is_read</span>
+                        <span class="field-desc">← 읽음 여부 (false = 새 알림)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="description">
+                <strong>🔔 통합 알림 시스템:</strong><br>
+                • <strong>게시글 관련</strong>: 승인/거부 시 작성자에게 즉시 알림 + 거부 사유 전달<br>
+                • <strong>소셜 상호작용</strong>: 댓글, 대댓글, 좋아요 발생 시 관련 사용자에게 실시간 알림<br>
+                • <strong>커뮤니티 활동</strong>: 초대, 가입 승인, 새 게시글/메모 등 커뮤니티 내 모든 활동 알림<br>
+                • <strong>메시지 시스템</strong>: 개인 메시지 및 대화 스레드의 새 메시지 알림<br>
+                • <strong>스마트 필터링</strong>: related_id/related_type으로 알림 원본 추적, 읽음/안읽음 상태 관리<br>
+                • <strong>사용자 경험</strong>: 모든 플랫폼 상호작용에 대한 누락 없는 알림 보장
+            </div>
+            
+            <div class="concept-box">
+                <div class="concept-title">🔔 알림 시스템 작동 예시</div>
+                <div class="concept-item">
+                    <strong>📝 게시글 승인/거부</strong>: 관리자가 승인 → 작성자에게 "게시글이 승인되었습니다" 알림 + post_id 연결 → 클릭 시 해당 게시글로 이동
+                </div>
+                <div class="concept-item">
+                    <strong>💬 댓글 알림</strong>: 새 댓글 작성 → 게시글 작성자에게 "새 댓글이 달렸습니다" 알림 + comment_id 연결 → 클릭 시 해당 댓글로 이동
+                </div>
+                <div class="concept-item">
+                    <strong>👍 좋아요 알림</strong>: 좋아요 누름 → 게시글/댓글 작성자에게 "좋아요를 받았습니다" 알림 + 관련 콘텐츠 ID 연결
+                </div>
+                <div class="concept-item">
+                    <strong>✉️ 메시지 알림</strong>: 개인 메시지 전송 → 수신자에게 "새 메시지가 있습니다" 알림 + message_id 연결 → 메시지함으로 이동
+                </div>
+                <div class="concept-item">
+                    <strong>👥 커뮤니티 알림</strong>: 커뮤니티 초대/가입 → 관련 사용자에게 "커뮤니티에 초대되었습니다" 알림 + community_id 연결
+                </div>
+            </div>
+        </div>
+
+        <!-- 커뮤니티 전용 게시글 시스템 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">👥</span>
+                커뮤니티 전용 게시글
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📝</span> community_posts
+                    </div>
+                    <div class="field">
+                        <span class="field-name">community_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 어느 커뮤니티에 속하는지</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">author_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 작성자 (커뮤니티 멤버만)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">title</span>
+                        <span class="field-desc">← 게시글 제목</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 게시글 내용 (마크다운)</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_type</span>
+                        <span class="field-desc">← notice/discussion/question</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">is_pinned</span>
+                        <span class="field-desc">← 상단 고정 여부</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">like_count</span>
+                        <span class="field-desc">← 좋아요 수</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">comment_count</span>
+                        <span class="field-desc">← 댓글 수</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">💬</span> community_post_comments
+                    </div>
+                    <div class="field">
+                        <span class="field-name">community_post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 댓글 달린 커뮤니티 게시글</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">parent_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 대댓글인 경우</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">author_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 댓글 작성자</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">content</span>
+                        <span class="field-desc">← 댓글 내용</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="description">
+                <strong>🏠 커뮤니티 내부용:</strong><br>
+                • 커뮤니티 멤버만 볼 수 있는 전용 게시글<br>
+                • 공지사항, 토론, 질문 등 다양한 유형<br>
+                • 일반 게시판과 별도로 관리되는 독립적 공간<br>
+                • 커뮤니티별 고유한 소통 공간 제공
+            </div>
+        </div>
+
+        <!-- 관리 시스템 섹션 -->
+        <div class="section">
+            <div class="section-title">
+                <span class="section-icon">⚙️</span>
+                관리 및 보조 기능
+            </div>
+            
+            <div class="flow">
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">🏷️</span> tags
+                    </div>
+                    <div class="field">
+                        <span class="field-name">name</span>
+                        <span class="field-desc">← "React", "JavaScript", "초보"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">usage_count</span>
+                        <span class="field-desc">← 사용된 횟수 (인기도)</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">✅</span> post_approvals
+                    </div>
+                    <div class="field">
+                        <span class="field-name">post_id</span> <span class="fk">FK</span>
+                        <span class="field-desc">← 심사한 게시글</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">action</span>
+                        <span class="field-desc">← approved / rejected</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">reason</span>
+                        <span class="field-desc">← "내용이 부적절합니다"</span>
+                    </div>
+                </div>
+                
+                <div class="table-box">
+                    <div class="table-name">
+                        <span class="table-icon">📊</span> admin_logs
+                    </div>
+                    <div class="field">
+                        <span class="field-name">action</span>
+                        <span class="field-desc">← "게시글 삭제", "사용자 차단"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">target_type</span>
+                        <span class="field-desc">← "post", "user", "comment"</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">details</span>
+                        <span class="field-desc">← 상세 정보 (JSON)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 특징 및 최종 정리 -->
+        <div class="highlight">
+            <h3>🎯 이 데이터베이스의 핵심 특징</h3>
+            
+            <p><strong>1. 이중 구조</strong></p>
+            <ul>
+                <li>📢 <strong>공개 게시판</strong>: 누구나 볼 수 있는 지식 공유 공간</li>
+                <li>🔒 <strong>비공개 커뮤니티</strong>: 소규모 팀을 위한 협업 공간</li>
+                <li>👥 <strong>커뮤니티 전용 게시글</strong>: 각 커뮤니티 내부 소통 전용</li>
+            </ul>
+            
+            <p><strong>2. 확장 가능한 설계</strong></p>
+            <ul>
+                <li>UUID 사용: 고유한 ID로 충돌 없이 확장 가능</li>
+                <li>모듈화: 각 기능이 독립적으로 작동</li>
+                <li>JSON 필드: 유연한 데이터 저장 (tags, settings 등)</li>
+            </ul>
+            
+            <p><strong>3. 소셜 기능</strong></p>
+            <ul>
+                <li>💬 <strong>댓글 좋아요</strong>: 댓글에도 좋아요 가능</li>
+                <li>✉️ <strong>직접 메시지</strong>: 사용자간 개인 메시지 교환</li>
+                <li>🔔 <strong>포괄적 알림 시스템</strong>: 게시글 승인/거부, 댓글, 대댓글, 좋아요, 메시지, 커뮤니티 초대 등 모든 사용자 상호작용에 대한 실시간 알림</li>
+                <li>📎 <strong>파일 첨부</strong>: 게시글과 커뮤니티에 파일 공유</li>
+            </ul>
+            
+            <p><strong>4. 자동화 기능</strong></p>
+            <ul>
+                <li>좋아요/댓글 수 자동 계산 (게시글 및 댓글)</li>
+                <li>updated_at 자동 업데이트</li>
+                <li>RLS(Row Level Security)로 권한 자동 관리</li>
+                <li><strong>스마트 알림 자동화</strong>: 게시글 승인/거부, 새 댓글/대댓글, 좋아요, 메시지 수신, 커뮤니티 활동 등 모든 상호작용에 대한 컨텍스트 인식 알림 자동 생성</li>
+                <li><strong>알림 추적 시스템</strong>: related_id/related_type을 통한 원본 콘텐츠 연결 및 읽음 상태 자동 관리</li>
+            </ul>
+            
+            <p><strong>5. 성능 최적화</strong></p>
+            <ul>
+                <li>인덱스로 빠른 검색</li>
+                <li>소프트 삭제로 데이터 보존</li>
+                <li>비정규화된 카운트 필드 (like_count, comment_count)</li>
+                <li>파일 크기 제한 및 타입 검증</li>
+            </ul>
+        </div>
+
+        <div class="tip-box" style="margin-top: 30px;">
+            <div class="tip-title">🚀 다음 단계</div>
+            <p>1. 이 구조를 보면서 각 테이블의 역할을 이해해보세요</p>
+            <p>2. 실제 코드에서 어떻게 사용되는지 확인해보세요</p>
+            <p>3. Supabase 대시보드에서 직접 데이터를 확인해보세요</p>
+            <p>4. 작은 기능부터 하나씩 구현해보세요!</p>
+        </div>
+    </div>
+</body>
+</html>

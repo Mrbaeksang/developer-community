@@ -2,12 +2,16 @@
  * 관리자 관련 타입 정의
  */
 
-import type { User } from './auth'
-import type { Post, Category } from './post'
+import type { User, NotificationType } from './auth'
+import type { Post, Category, BoardType, PostStatus } from './post'
 import type { Community } from './community'
+import type { Database } from './database.types'
+
+// Type aliases for enums
+export type ApprovalAction = Database['public']['Enums']['approval_action']
 
 // Re-export commonly used types
-export type { Category }
+export type { Category, BoardType }
 
 // 관리자 통계
 export interface AdminStats {
@@ -20,6 +24,8 @@ export interface AdminStats {
     active_users_today: number
     new_users_today: number
     new_posts_today: number
+    pending_approvals: number
+    notifications_sent_today: number
   }
   
   user_stats: {
@@ -37,8 +43,10 @@ export interface AdminStats {
     pending_posts: number
     rejected_posts: number
     draft_posts: number
+    archived_posts: number
     average_views: number
     average_likes: number
+    posts_by_board_type: Record<string, number>
   }
   
   community_stats: {
@@ -81,11 +89,21 @@ export interface AdminUser extends User {
 // 관리자용 게시글 정보
 export interface AdminPost extends Post {
   reports_count: number
-  rejection_reason?: string
-  approved_by?: string
-  approved_at?: string
-  rejected_by?: string
-  rejected_at?: string
+  board_type: BoardType
+  approvals?: PostApproval[]
+  last_approval?: PostApproval
+}
+
+// 게시글 승인 정보
+export interface PostApproval {
+  id: string
+  post_id: string
+  admin_id: string
+  action: ApprovalAction
+  reason?: string
+  admin_notes?: string
+  created_at: string
+  admin?: User
 }
 
 // 관리자용 커뮤니티 정보
@@ -110,16 +128,27 @@ export interface AdminFilters {
   date_to?: string
 }
 
+// 게시판 타입 관리
+export interface BoardTypeInput {
+  name: string
+  slug: string
+  description?: string
+  icon?: string
+  requires_approval?: boolean
+  is_active?: boolean
+  order_index?: number
+}
+
 // 카테고리 생성 입력
 export interface CreateCategoryInput {
+  board_type_id: string
   name: string
-  slug?: string
+  slug: string
   description?: string
   color?: string
   icon?: string
   is_active?: boolean
-  sort_order?: number
-  [key: string]: unknown
+  order_index?: number
 }
 
 // 카테고리 수정 입력
@@ -130,8 +159,7 @@ export interface UpdateCategoryInput {
   color?: string
   icon?: string
   is_active?: boolean
-  sort_order?: number
-  [key: string]: unknown
+  order_index?: number
 }
 
 // 인기 태그
@@ -165,6 +193,20 @@ export interface Report {
   reported_community?: Community
 }
 
+// 알림 관리
+export interface AdminNotification {
+  id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  message?: string
+  related_id?: string
+  related_type?: string
+  is_read: boolean
+  created_at: string
+  user?: User
+}
+
 // 시스템 설정
 export interface SystemSettings {
   site: {
@@ -178,10 +220,13 @@ export interface SystemSettings {
   
   features: {
     user_registration: boolean
-    post_approval_required: boolean
+    board_types: BoardTypeSettings[]
     community_creation_enabled: boolean
     file_upload_enabled: boolean
     comments_enabled: boolean
+    comment_likes_enabled: boolean
+    notifications_enabled: boolean
+    messages_enabled: boolean
   }
   
   limits: {
@@ -192,10 +237,11 @@ export interface SystemSettings {
   }
   
   content: {
-    default_post_status: 'draft' | 'pending' | 'published'
+    default_post_status: PostStatus
     auto_publish_trusted_users: boolean
     content_moderation: boolean
     spam_detection: boolean
+    denormalized_author_info: boolean
   }
   
   notifications: {
@@ -207,20 +253,28 @@ export interface SystemSettings {
   }
 }
 
+// 게시판 타입별 설정
+export interface BoardTypeSettings {
+  board_type_id: string
+  board_type_name: string
+  requires_approval: boolean
+  auto_approve_roles: string[]
+  max_posts_per_day?: number
+  allowed_file_types?: string[]
+}
+
 // 관리 작업 로그
 export interface AdminActionLog {
   id: string
   admin_id: string
   action: string
-  target_type: 'user' | 'post' | 'community' | 'category' | 'system'
+  target_type: string
   target_id?: string
   details: Record<string, unknown>
-  ip_address: string
-  user_agent: string
   created_at: string
   
   // 관계 데이터
-  admin: User
+  admin?: User
 }
 
 // 모니터링 메트릭

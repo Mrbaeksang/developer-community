@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -24,26 +22,88 @@ export default function LoginPage() {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
+    // 입력값 검증
+    if (!email || !password) {
+      setError('이메일과 비밀번호를 입력해주세요.')
+      setIsLoading(false)
+      return
+    }
+
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('올바른 이메일 형식이 아닙니다.')
+      setIsLoading(false)
+      return
+    }
+
     try {
       // 로그인 시도
+      console.log('로그인 시도:', { 
+        email, 
+        passwordLength: password.length,
+        timestamp: new Date().toISOString()
+      })
+      
+      // Supabase URL 확인
+      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
       
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email.trim(),
+        password: password.trim(),
       })
 
       // 로그인 응답 처리
+      console.log('로그인 응답:', { 
+        success: !!data?.user,
+        error: error,
+        errorMessage: error?.message,
+        errorStatus: error?.status,
+        errorCode: error?.code,
+        user: data?.user?.email 
+      })
 
-      if (error) throw error
+      if (error) {
+        console.error('로그인 에러 상세:', error)
+        throw error
+      }
 
       if (data.user) {
         // 로그인 성공
-        router.push('/')
-        router.refresh()
+        console.log('로그인 성공')
+        
+        // 세션 확인
+        const { data: sessionData } = await supabase.auth.getSession()
+        console.log('세션 확인:', {
+          hasSession: !!sessionData.session,
+          userId: sessionData.session?.user?.id,
+          expiresAt: sessionData.session?.expires_at
+        })
+        
+        // 쿠키 확인
+        console.log('현재 쿠키:', document.cookie)
+        
+        // 약간의 지연 후 리다이렉트 (쿠키 설정 시간 확보)
+        setTimeout(() => {
+          console.log('리다이렉트 전 쿠키:', document.cookie)
+          window.location.href = '/'
+        }, 100)
       }
     } catch (err: unknown) {
       // 로그인 에러 처리
-      setError(err instanceof Error ? err.message : '로그인에 실패했습니다.')
+      console.error('로그인 실패:', err)
+      
+      // Supabase 에러 메시지 처리
+      const error = err as { message?: string; status?: number }
+      if (error?.message === 'Invalid login credentials') {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+      } else if (error?.message === 'Email not confirmed') {
+        setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
+      } else if (error?.status === 400) {
+        setError('로그인 정보를 다시 확인해주세요.')
+      } else {
+        setError(error?.message || '로그인에 실패했습니다.')
+      }
     }
     setIsLoading(false)
   }

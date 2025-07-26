@@ -27,35 +27,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-
-// 타입 정의
-interface Category {
-  id: string
-  name: string
-  slug: string
-  color: string
-}
-
-interface User {
-  id: string
-  username: string
-  avatar_url: string | null
-  bio?: string
-  role?: string
-}
-
-interface Post {
-  id: string
-  title: string
-  content: string
-  excerpt: string
-  author: User
-  category: Category
-  status: string
-  tags: string[]
-  created_at: string
-  updated_at: string
-}
+import type { Post, Category, PostStatus, BoardType } from '@/types/post'
 
 export default function EditPostPage() {
   const router = useRouter()
@@ -66,7 +38,7 @@ export default function EditPostPage() {
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [boardTypes, setBoardTypes] = useState<BoardType[]>([])
   const [post, setPost] = useState<Post | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -75,6 +47,7 @@ export default function EditPostPage() {
   
   const [formData, setFormData] = useState({
     title: '',
+    board_type_id: '',
     category_id: '',
     excerpt: '',
     content: '',
@@ -99,8 +72,6 @@ export default function EditPostPage() {
           .select('id, username, avatar_url, bio, role')
           .eq('id', session.user.id)
           .single()
-        
-        setCurrentUser(profile)
 
         // 게시글 데이터 로드
         const postResponse = await fetch(`/api/posts/${id}`)
@@ -110,7 +81,7 @@ export default function EditPostPage() {
           }
           throw new Error('게시글을 불러오는데 실패했습니다')
         }
-        const postData = await postResponse.json()
+        const { post: postData } = await postResponse.json()
         
         // 권한 확인 (작성자 또는 관리자만 수정 가능)
         if (postData.author.id !== profile?.id && profile?.role !== 'admin') {
@@ -120,14 +91,25 @@ export default function EditPostPage() {
         setPost(postData)
         setFormData({
           title: postData.title,
+          board_type_id: postData.board_type_id || '',
           category_id: postData.category.id,
           excerpt: postData.excerpt || '',
           content: postData.content,
         })
         setTags(postData.tags || [])
 
-        // 카테고리 데이터 로드
-        const categoriesResponse = await fetch('/api/categories')
+        // 게시판 타입 데이터 로드
+        const boardTypesResponse = await fetch('/api/board-types')
+        if (!boardTypesResponse.ok) throw new Error('게시판 타입을 불러오는데 실패했습니다')
+        const boardTypesData = await boardTypesResponse.json()
+        setBoardTypes(boardTypesData)
+
+        // 카테고리 데이터 로드 (board_type_id가 있으면 해당 게시판의 카테고리만)
+        let categoriesUrl = '/api/categories'
+        if (postData.board_type_id) {
+          categoriesUrl = `/api/categories/${postData.board_type_id}`
+        }
+        const categoriesResponse = await fetch(categoriesUrl)
         if (!categoriesResponse.ok) throw new Error('카테고리를 불러오는데 실패했습니다')
         const categoriesData = await categoriesResponse.json()
         setCategories(categoriesData)
@@ -143,8 +125,8 @@ export default function EditPostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.title.trim() || !formData.content.trim() || !formData.category_id) {
-      alert('제목, 내용, 카테고리는 필수 입력 항목입니다.')
+    if (!formData.title.trim() || !formData.content.trim() || !formData.board_type_id || !formData.category_id) {
+      alert('제목, 내용, 게시판, 카테고리는 필수 입력 항목입니다.')
       return
     }
 
@@ -156,7 +138,7 @@ export default function EditPostPage() {
         body: JSON.stringify({
           ...formData,
           tags,
-          status: post?.status === 'published' ? 'published' : 'pending' // 이미 게시된 글은 즉시 반영, 아니면 재승인
+          status: (post?.status === 'published' ? 'published' : 'pending') as PostStatus // 이미 게시된 글은 즉시 반영, 아니면 재승인
         })
       })
 
@@ -188,7 +170,7 @@ export default function EditPostPage() {
         body: JSON.stringify({
           ...formData,
           tags,
-          status: 'draft' // 임시저장 상태
+          status: 'draft' as PostStatus // 임시저장 상태
         })
       })
 
@@ -355,6 +337,46 @@ export default function EditPostPage() {
 
           {/* 사이드바 */}
           <div className="space-y-6">
+            {/* 게시판 선택 */}
+            <Card>
+              <CardHeader>
+                <CardTitle>게시판</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select
+                  value={formData.board_type_id}
+                  onValueChange={async (value) => {
+                    setFormData({ ...formData, board_type_id: value, category_id: '' })
+                    // 게시판이 변경되면 해당 게시판의 카테고리 로드
+                    try {
+                      const response = await fetch(`/api/categories/${value}`)
+                      if (response.ok) {
+                        const data = await response.json()
+                        setCategories(data)
+                      }
+                    } catch (error) {
+                      console.error('카테고리 로드 오류:', error)
+                    }
+                  }}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="게시판 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {boardTypes.map(boardType => (
+                      <SelectItem key={boardType.id} value={boardType.id}>
+                        <div className="flex items-center gap-2">
+                          {boardType.icon && <span>{boardType.icon}</span>}
+                          {boardType.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+            
             {/* 카테고리 */}
             <Card>
               <CardHeader>
@@ -365,9 +387,10 @@ export default function EditPostPage() {
                   value={formData.category_id}
                   onValueChange={(value) => setFormData({ ...formData, category_id: value })}
                   required
+                  disabled={!formData.board_type_id}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="카테고리 선택" />
+                    <SelectValue placeholder={formData.board_type_id ? "카테고리 선택" : "먼저 게시판을 선택하세요"} />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map(category => (
@@ -375,7 +398,7 @@ export default function EditPostPage() {
                         <div className="flex items-center gap-2">
                           <div 
                             className="h-3 w-3 rounded-full" 
-                            style={{ backgroundColor: category.color }}
+                            style={{ backgroundColor: category.color || '#64748b' }}
                           />
                           {category.name}
                         </div>

@@ -174,7 +174,7 @@ export function useCreateCategory() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (data: CreateCategoryInput) => apiClient.post<Category>('/admin/categories', data),
+    mutationFn: (data: CreateCategoryInput) => apiClient.post<Category>('/admin/categories', data as unknown as Record<string, unknown>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: categoryKeys.lists() })
     },
@@ -187,7 +187,7 @@ export function useUpdateCategory() {
   
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCategoryInput }) =>
-      apiClient.put<Category>(`/admin/categories/${id}`, data),
+      apiClient.put<Category>(`/admin/categories/${id}`, data as unknown as Record<string, unknown>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: categoryKeys.lists() })
     },

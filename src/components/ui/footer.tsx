@@ -18,7 +18,7 @@ export function Footer() {
               <li><Link href="/posts" className="hover:text-primary">포스트</Link></li>
               <li><Link href="/posts?category=tech" className="hover:text-primary">기술 아티클</Link></li>
               <li><Link href="/communities" className="hover:text-primary">커뮤니티</Link></li>
-              <li><Link href="/posts/write" className="hover:text-primary">글쓰기</Link></li>
+              <li><Link href="/write" className="hover:text-primary">글쓰기</Link></li>
             </ul>
           </div>
           

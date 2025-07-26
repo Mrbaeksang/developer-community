@@ -50,7 +50,12 @@ export function useInfiniteScroll<T>(
     try {
       const result = await fetchFunction(page, limit)
       
-      setData(prevData => [...prevData, ...result.data])
+      // 중복 제거: 이미 존재하는 ID는 제외하고 새 데이터만 추가
+      setData(prevData => {
+        const existingIds = new Set(prevData.map((item) => (item as { id: string }).id))
+        const uniqueNewData = result.data.filter((item) => !existingIds.has((item as { id: string }).id))
+        return [...prevData, ...uniqueNewData]
+      })
       setTotal(result.total)
       setHasMore(result.hasMore)
       setPage(prevPage => prevPage + 1)
@@ -101,10 +106,11 @@ export function useInfiniteScroll<T>(
 
   // 초기 데이터 로드
   useEffect(() => {
-    if (enabled && data.length === 0 && page === 1) {
+    if (enabled && data.length === 0 && page === 1 && !loading) {
       loadMore()
     }
-  }, [enabled, data.length, page, loadMore])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, page, loading, loadMore])
 
   return {
     data,
@@ -197,7 +203,15 @@ export function useInfinitePostsScroll(category?: string, searchQuery?: string):
     }
   }, [category, searchQuery])
 
-  return useInfiniteScroll<Post>(fetchPosts, { enabled: true })
+  const scrollResult = useInfiniteScroll<Post>(fetchPosts, { enabled: true })
+  const { reset } = scrollResult
+
+  // category나 searchQuery가 변경될 때 상태 리셋
+  useEffect(() => {
+    reset()
+  }, [category, searchQuery, reset])
+
+  return scrollResult
 }
 
 // 커뮤니티 무한 스크롤 훅

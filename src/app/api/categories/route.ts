@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, sanitizeInput, requireAdmin } from '@/lib/security'
+import { 
+  executeWithRLSHandling,
+  handleRLSError 
+} from '@/lib/supabase/rls-error-handler'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -28,19 +36,32 @@ export async function GET() {
       }
     )
 
-    // 모든 카테고리 조회
-    const { data: categories, error } = await supabase
-      .from('post_categories')
-      .select('*')
-      .order('name', { ascending: true })
+    // 모든 카테고리 조회 (board_types 정보 포함) - RLS 에러 처리 포함
+    const categoriesResult = await executeWithRLSHandling(
+      () => supabase
+        .from('categories')
+        .select(`
+          *,
+          board_types(*)
+        `)
+        .eq('is_active', true)
+        .order('board_type_id')
+        .order('order_index'),
+      {
+        context: '카테고리 목록 조회',
+        returnEmptyArray: true
+      }
+    )
 
-    if (error) {
-      console.error('카테고리 조회 에러:', error)
+    if (categoriesResult.error && !categoriesResult.isRLSError) {
+      console.error('카테고리 조회 에러:', categoriesResult.error)
       return NextResponse.json(
         { error: '카테고리를 불러오는 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
+
+    const categories = categoriesResult.data || []
 
     return NextResponse.json(categories)
   } catch (error) {
@@ -53,6 +74,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -78,32 +103,12 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
-    if (authError || !session) {
-      return NextResponse.json(
-        { error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
-    }
-
     // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json(
-        { error: '관리자만 카테고리를 생성할 수 있습니다.' },
-        { status: 403 }
-      )
-    }
+    const adminCheck = await requireAdmin(request, supabase)
+    if (adminCheck) return adminCheck
 
     const body = await request.json()
-    const { name, description } = body
+    const { name, description, board_type_id } = body
 
     // 필수 필드 검증
     if (!name) {
@@ -113,25 +118,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Input sanitization
+    const sanitizedName = sanitizeInput(name)
+    const sanitizedDescription = description ? sanitizeInput(description) : null
+
     // slug 생성 (한글을 영문으로 변환하는 간단한 로직)
-    const slug = name
+    const slug = sanitizedName
       .toLowerCase()
       .replace(/[^a-z0-9가-힣]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
 
-    // 카테고리 생성
-    const { data: category, error } = await supabase
-      .from('post_categories')
-      .insert({
-        name,
-        slug,
-        description
-      })
-      .select('*')
-      .single()
+    // 카테고리 생성 - RLS 에러 처리 포함
+    const categoryResult = await executeWithRLSHandling(
+      () => supabase
+        .from('categories')
+        .insert({
+          name: sanitizedName,
+          slug,
+          description: sanitizedDescription,
+          board_type_id: board_type_id // board_type_id is required for categories
+        })
+        .select('*')
+        .single(),
+      {
+        context: '카테고리 생성',
+        fallbackData: null
+      }
+    )
 
-    if (error) {
+    if (categoryResult.error && !categoryResult.isRLSError) {
+      const error = categoryResult.error
       if (error.code === '23505') { // unique constraint violation
         return NextResponse.json(
           { error: '이미 존재하는 카테고리입니다.' },
@@ -141,6 +158,14 @@ export async function POST(request: NextRequest) {
       console.error('카테고리 생성 에러:', error)
       return NextResponse.json(
         { error: '카테고리 생성 중 오류가 발생했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    const category = categoryResult.data
+    if (!category) {
+      return NextResponse.json(
+        { error: '카테고리 생성에 실패했습니다.' },
         { status: 500 }
       )
     }

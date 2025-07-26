@@ -9,14 +9,11 @@ import { Button } from './button'
 import { 
   Github, 
   Twitter, 
-  Linkedin, 
   Globe, 
   MapPin, 
   Calendar,
   Star,
-  GitFork,
   Code,
-  Users,
   Award,
   Zap
 } from 'lucide-react'
@@ -100,7 +97,7 @@ export function DeveloperProfileCard({
     return (
       <div className={cn('flex items-center gap-3 p-3 rounded-lg border bg-card', className)}>
         <Avatar className="h-10 w-10">
-          <AvatarImage src={profile.avatar_url} />
+          <AvatarImage src={profile.avatar_url || undefined} />
           <AvatarFallback>{profile.username[0].toUpperCase()}</AvatarFallback>
         </Avatar>
         
@@ -147,7 +144,7 @@ export function DeveloperProfileCard({
       <CardHeader className="pb-4">
         <div className="flex items-start gap-4">
           <Avatar className="h-16 w-16">
-            <AvatarImage src={profile.avatar_url} />
+            <AvatarImage src={profile.avatar_url || undefined} />
             <AvatarFallback className="text-xl">
               {profile.username[0].toUpperCase()}
             </AvatarFallback>

@@ -3,9 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import "../styles/developer-theme.css";
-import { HeaderProvider } from "@/components/providers/header-provider";
+import { HeaderWrapper } from "@/components/providers/header-wrapper";
 import { QueryProvider } from "@/providers/query-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { BottomNav } from "@/components/navigation/BottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,8 +54,11 @@ export default function RootLayout({
           }
         >
           <QueryProvider>
-            <HeaderProvider />
-            {children}
+            <HeaderWrapper />
+            <main className="pb-16 md:pb-0">
+              {children}
+            </main>
+            <BottomNav />
           </QueryProvider>
         </ErrorBoundary>
       </body>

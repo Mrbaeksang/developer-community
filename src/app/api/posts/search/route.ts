@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit, sanitizeInput } from '@/lib/security'
 
 export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
     
     const query = searchParams.get('q')
     const category = searchParams.get('category')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100) // Max 100
     const offset = parseInt(searchParams.get('offset') || '0')
 
     if (!query || query.trim().length < 2) {
@@ -16,6 +21,10 @@ export async function GET(request: NextRequest) {
         error: '검색어는 최소 2글자 이상 입력해주세요' 
       }, { status: 400 })
     }
+
+    // Sanitize search query
+    const sanitizedQuery = sanitizeInput(query)
+    const searchPattern = `%${sanitizedQuery.replace(/[%_]/g, '\\$&')}%`
 
     // 게시글 검색 쿼리 구성
     let postsQuery = supabase
@@ -31,24 +40,31 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         tags,
+        author_id,
+        author_username,
+        author_display_name,
+        author_avatar_url,
+        board_type_id,
+        board_types (
+          id,
+          name,
+          slug,
+          icon,
+          requires_approval
+        ),
         categories!inner (
           id,
           name,
           slug,
-          color
-        ),
-        profiles!inner (
-          id,
-          username,
-          display_name,
-          avatar_url
+          color,
+          board_type_id
         )
       `)
       .eq('status', 'published')
       .order('created_at', { ascending: false })
 
-    // 제목과 내용에서 검색
-    postsQuery = postsQuery.or(`title.ilike.%${query}%,content.ilike.%${query}%,excerpt.ilike.%${query}%`)
+    // 제목과 내용에서 검색 (sanitized)
+    postsQuery = postsQuery.or(`title.ilike.${searchPattern},content.ilike.${searchPattern},excerpt.ilike.${searchPattern}`)
 
     // 카테고리 필터
     if (category && category !== 'all') {
@@ -58,7 +74,7 @@ export async function GET(request: NextRequest) {
     // 페이지네이션
     postsQuery = postsQuery.range(offset, offset + limit - 1)
 
-    const { data: posts, error, count } = await postsQuery
+    const { data: posts, error } = await postsQuery
 
     if (error) {
       console.error('Posts search error:', error)
@@ -81,21 +97,28 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         tags,
+        author_id,
+        author_username,
+        author_display_name,
+        author_avatar_url,
+        board_type_id,
+        board_types (
+          id,
+          name,
+          slug,
+          icon,
+          requires_approval
+        ),
         categories!inner (
           id,
           name,
           slug,
-          color
-        ),
-        profiles!inner (
-          id,
-          username,
-          display_name,
-          avatar_url
+          color,
+          board_type_id
         )
       `)
       .eq('status', 'published')
-      .contains('tags', [query])
+      .contains('tags', [sanitizedQuery])
       .range(0, 10) // 태그 검색은 제한적으로
 
     // 게시글 데이터 변환
@@ -110,24 +133,30 @@ export async function GET(request: NextRequest) {
       created_at: post.created_at as string,
       updated_at: post.updated_at as string,
       tags: (post.tags as string[]) || [],
+      board_type_id: post.board_type_id as string,
+      board_type: post.board_types ? {
+        id: (post.board_types as Record<string, unknown>).id as string,
+        name: (post.board_types as Record<string, unknown>).name as string,
+        slug: (post.board_types as Record<string, unknown>).slug as string,
+        icon: (post.board_types as Record<string, unknown>).icon as string | null,
+        requires_approval: (post.board_types as Record<string, unknown>).requires_approval as boolean
+      } : undefined,
       category: (() => {
-        const category = post.categories as { id: string; name: string; slug: string; color: string }
+        const category = post.categories as { id: string; name: string; slug: string; color: string; board_type_id: string }
         return {
           id: category.id,
           name: category.name,
           slug: category.slug,
-          color: category.color
+          color: category.color,
+          board_type_id: category.board_type_id
         }
       })(),
-      author: (() => {
-        const profile = post.profiles as { id: string; username: string; display_name?: string; avatar_url?: string }
-        return {
-          id: profile.id,
-          username: profile.username,
-          display_name: profile.display_name,
-          avatar_url: profile.avatar_url
-        }
-      })()
+      author: {
+        id: post.author_id as string,
+        username: post.author_username as string || 'Unknown',
+        display_name: post.author_display_name as string | null,
+        avatar_url: post.author_avatar_url as string | null
+      }
     }))
 
     // 태그로 찾은 게시글도 추가 (중복 제거)
@@ -144,24 +173,30 @@ export async function GET(request: NextRequest) {
         created_at: post.created_at as string,
         updated_at: post.updated_at as string,
         tags: (post.tags as string[]) || [],
+        board_type_id: post.board_type_id as string,
+        board_type: post.board_types ? {
+          id: (post.board_types as Record<string, unknown>).id as string,
+          name: (post.board_types as Record<string, unknown>).name as string,
+          slug: (post.board_types as Record<string, unknown>).slug as string,
+          icon: (post.board_types as Record<string, unknown>).icon as string | null,
+          requires_approval: (post.board_types as Record<string, unknown>).requires_approval as boolean
+        } : undefined,
         category: (() => {
-          const category = post.categories as { id: string; name: string; slug: string; color: string }
+          const category = post.categories as { id: string; name: string; slug: string; color: string; board_type_id: string }
           return {
             id: category.id,
             name: category.name,
             slug: category.slug,
-            color: category.color
+            color: category.color,
+            board_type_id: category.board_type_id
           }
         })(),
-        author: (() => {
-          const profile = post.profiles as { id: string; username: string; display_name?: string; avatar_url?: string }
-          return {
-            id: profile.id,
-            username: profile.username,
-            display_name: profile.display_name,
-            avatar_url: profile.avatar_url
-          }
-        })()
+        author: {
+          id: post.author_id as string,
+          username: post.author_username as string || 'Unknown',
+          display_name: post.author_display_name as string | null,
+          avatar_url: post.author_avatar_url as string | null
+        }
       }))
 
     const allPosts = [...transformedPosts, ...transformedTagPosts]
@@ -171,13 +206,13 @@ export async function GET(request: NextRequest) {
       .from('posts')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'published')
-      .or(`title.ilike.%${query}%,content.ilike.%${query}%,excerpt.ilike.%${query}%`)
+      .or(`title.ilike.${searchPattern},content.ilike.${searchPattern},excerpt.ilike.${searchPattern}`)
 
     return NextResponse.json({
       data: allPosts,
       total: totalCount || 0,
       hasMore: offset + limit < (totalCount || 0),
-      query,
+      query: sanitizedQuery,
       page: Math.floor(offset / limit) + 1,
       totalPages: Math.ceil((totalCount || 0) / limit)
     })

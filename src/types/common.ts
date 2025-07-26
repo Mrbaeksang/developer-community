@@ -1,14 +1,11 @@
 // 공통 타입 정의
+import type { Database } from './database.types'
 
-export interface User {
-  id: string
-  username: string
-  display_name?: string
-  avatar_url?: string
-  email?: string
-  role?: 'admin' | 'user'
-  created_at: string
-}
+// Database 타입에서 enum 타입 추출
+export type UserRole = Database['public']['Enums']['user_role']
+
+// User type has been moved to auth.ts to avoid duplication
+// Import from '@/types/auth' instead
 
 export interface ApiResponse<T> {
   data?: T

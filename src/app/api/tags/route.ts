@@ -1,86 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/security'
+import { 
+  executeWithRLSHandling,
+  handleRLSError 
+} from '@/lib/supabase/rls-error-handler'
 
+/**
+ * GET /api/tags
+ * 태그 목록 조회
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '20')
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
 
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  try {
+    const supabase = await createClient()
+
+    // 쿼리 파라미터 파싱
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = parseInt(searchParams.get('offset') || '0')
+    const sort = searchParams.get('sort') || 'usage_count' // usage_count, name, created_at
+    const order = searchParams.get('order') || 'desc'
+
+    // 태그 조회
+    let query = supabase
+      .from('tags')
+      .select('*')
+
+    // 검색어가 있는 경우
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`)
+    }
+
+    // 정렬 및 페이지네이션
+    query = query
+      .order(sort, { ascending: order === 'asc' })
+      .range(offset, offset + limit - 1)
+
+    const tagsResult = await executeWithRLSHandling(
+      () => query,
       {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => 
-                cookieStore.set(name, value, options)
-              )
-            } catch {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
-          }
-        }
+        context: '태그 목록 조회',
+        returnEmptyArray: true
       }
     )
 
-    // PostgreSQL에서 배열 태그를 unnest로 풀어서 개수 세기
-    const { data: tagData, error } = await supabase
-      .rpc('get_popular_tags', { tag_limit: limit })
-
-    if (error) {
-      console.error('태그 조회 에러:', error)
-      
-      // RPC 함수가 없으면 fallback으로 간단한 쿼리 사용
-      const { data: posts, error: postsError } = await supabase
-        .from('posts')
-        .select('tags')
-        .eq('status', 'approved')
-        .not('tags', 'is', null)
-
-      if (postsError) {
-        console.error('게시글 태그 조회 에러:', postsError)
-        return NextResponse.json(
-          { error: '태그를 불러오는 중 오류가 발생했습니다.' },
-          { status: 500 }
-        )
-      }
-
-      // JavaScript에서 태그 집계
-      const tagCounts: { [key: string]: number } = {}
-      
-      posts?.forEach((post) => {
-        if (post.tags && Array.isArray(post.tags)) {
-          post.tags.forEach((tag: string) => {
-            if (tag && tag.trim()) {
-              const cleanTag = tag.trim()
-              tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1
-            }
-          })
-        }
-      })
-
-      // 인기도 순으로 정렬하고 limit 적용
-      const sortedTags = Object.entries(tagCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, limit)
-        .map(([tag, count]) => ({ tag, count }))
-
-      return NextResponse.json(sortedTags)
+    if (tagsResult.error && !tagsResult.isRLSError) {
+      console.error('태그 조회 에러:', tagsResult.error)
+      return NextResponse.json(
+        { error: '태그를 불러오는데 실패했습니다' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json(tagData || [])
+    const tags = tagsResult.data || []
+
+    // 전체 태그 수 조회
+    let countQuery = supabase
+      .from('tags')
+      .select('id', { count: 'exact', head: true })
+
+    if (search) {
+      countQuery = countQuery.or(`name.ilike.%${search}%,description.ilike.%${search}%`)
+    }
+
+    const countResult = await executeWithRLSHandling(
+      () => countQuery,
+      {
+        context: '태그 개수 조회',
+        fallbackData: { count: 0 }
+      }
+    )
+
+    if (countResult.error && !countResult.isRLSError) {
+      console.error('태그 개수 조회 에러:', countResult.error)
+    }
+
+    const count = countResult.data?.count || 0
+
+    return NextResponse.json({
+      tags: tags || [],
+      total: count || 0,
+      has_more: offset + limit < (count || 0),
+    })
   } catch (error) {
-    console.error('태그 조회 예외:', error)
+    console.error('Get tags exception:', error)
     return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

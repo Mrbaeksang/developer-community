@@ -2,14 +2,20 @@
  * 인증 관련 타입 정의
  */
 
+import type { Database } from './database.types'
+
+// Type aliases for database enums
+export type UserRole = Database['public']['Enums']['user_role']
+export type NotificationType = Database['public']['Enums']['notification_type']
+
 // 기본 사용자 타입
 export interface User {
   id: string
   email: string
   username?: string
-  full_name?: string
+  display_name?: string
   avatar_url?: string
-  role: 'admin' | 'user'
+  role: UserRole
   is_email_verified: boolean
   email_verified_at?: string
   last_sign_in_at?: string
@@ -75,7 +81,7 @@ export interface SignupInput {
   password: string
   password_confirmation: string
   username?: string
-  full_name?: string
+  display_name?: string
   terms_accepted: boolean
   newsletter_subscription?: boolean
   [key: string]: unknown
@@ -84,7 +90,7 @@ export interface SignupInput {
 // 프로필 업데이트 입력
 export interface UpdateProfileInput {
   username?: string
-  full_name?: string
+  display_name?: string
   bio?: string
   website?: string
   location?: string
@@ -140,8 +146,7 @@ export interface OAuthResponse {
   state?: string
 }
 
-// 사용자 역할
-export type UserRole = 'admin' | 'user'
+// UserRole은 이미 database.types.ts에서 import됨
 
 // 사용자 상태
 export type UserStatus = 'active' | 'inactive' | 'banned' | 'pending'

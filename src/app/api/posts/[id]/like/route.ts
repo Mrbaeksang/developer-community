@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, validateUUID } from '@/lib/security'
 
 interface Params {
   id: string
@@ -10,8 +11,20 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -68,10 +81,10 @@ export async function POST(
       )
     }
 
-    // 승인된 게시글만 좋아요 가능
-    if (post.status !== 'approved') {
+    // 공개된 게시글만 좋아요 가능
+    if (post.status !== 'published') {
       return NextResponse.json(
-        { error: '승인된 게시글만 좋아요가 가능합니다.' },
+        { error: '공개된 게시글만 좋아요가 가능합니다.' },
         { status: 403 }
       )
     }
@@ -153,8 +166,20 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(

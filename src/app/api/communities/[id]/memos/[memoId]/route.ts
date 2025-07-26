@@ -60,10 +60,7 @@ export async function GET(
         tags,
         created_at,
         updated_at,
-        author_id,
-        profiles:author_id (
-          username
-        )
+        author_id
       `)
       .eq('id', memoId)
       .eq('community_id', id)
@@ -73,17 +70,18 @@ export async function GET(
       return NextResponse.json({ error: '메모를 찾을 수 없습니다' }, { status: 404 })
     }
 
+    // 사용자 정보 조회
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', memo.author_id)
+      .single()
+
     // 응답 형식 변환
-    const memoWithProfiles = memo as typeof memo & {
-      profiles?: {
-        username: string
-      }
-    }
-    
     const formattedMemo = {
       id: memo.id,
       author_id: memo.author_id,
-      author: memoWithProfiles.profiles?.username || 'Unknown',
+      author: profile?.username || 'Unknown',
       title: memo.title,
       content: memo.content,
       is_pinned: memo.is_pinned,

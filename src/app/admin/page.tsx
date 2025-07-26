@@ -9,14 +9,11 @@ import {
   TrendingUp,
   Activity,
   Eye,
-  Loader2
+  Loader2,
+  TestTube2
 } from 'lucide-react'
-
-interface Stats {
-  totalUsers: number
-  totalPosts: number
-  totalCommunities: number
-}
+import Link from 'next/link'
+import type { AdminStats } from '@/types/admin'
 
 interface AdminActivity {
   id: string
@@ -28,7 +25,7 @@ interface AdminActivity {
 }
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [stats, setStats] = useState<AdminStats | null>(null)
   const [activities, setActivities] = useState<AdminActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,19 +37,47 @@ export default function AdminDashboardPage() {
         
         // 통계 데이터와 활동 로그를 병렬로 조회
         const [statsResponse, activitiesResponse] = await Promise.all([
-          fetch('/api/stats'),
-          fetch('/api/admin/activities')
+          fetch('/api/admin/stats', {
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          }),
+          fetch('/api/admin/activities', {
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          })
         ])
 
         if (!statsResponse.ok) {
           throw new Error('통계 데이터 조회 실패')
         }
+        
+        // 활동 로그 응답 처리
+        let activitiesData = []
         if (!activitiesResponse.ok) {
-          throw new Error('활동 로그 조회 실패') 
+          console.error('활동 로그 API 응답:', activitiesResponse.status, activitiesResponse.statusText)
+          // 에러가 있어도 계속 진행 (빈 배열 사용)
+          try {
+            const errorData = await activitiesResponse.json()
+            console.error('활동 로그 에러 상세:', errorData)
+          } catch (e) {
+            console.error('활동 로그 응답 파싱 실패')
+          }
+        } else {
+          try {
+            const data = await activitiesResponse.json()
+            // 배열인지 확인
+            activitiesData = Array.isArray(data) ? data : []
+          } catch (e) {
+            console.warn('활동 로그 응답 파싱 실패, 빈 배열로 처리')
+            activitiesData = []
+          }
         }
 
         const statsData = await statsResponse.json()
-        const activitiesData = await activitiesResponse.json()
 
         setStats(statsData)
         setActivities(activitiesData)
@@ -67,28 +92,28 @@ export default function AdminDashboardPage() {
     fetchDashboardData()
   }, [])
 
-  // 통계 카드 데이터 구성
-  const statsCards = stats ? [
+  // 통계 카드 데이터 구성 - null 체크 추가
+  const statsCards = stats && stats.overview ? [
     {
       title: '전체 사용자',
-      value: stats.totalUsers.toString(),
+      value: (stats.overview.total_users || 0).toString(),
       description: `등록된 전체 회원 수`,
       icon: Users,
-      trend: stats.totalUsers > 0 ? '+' : ''
+      trend: stats.overview.total_users > 0 ? '+' : ''
     },
     {
       title: '승인된 게시글',
-      value: stats.totalPosts.toString(),
+      value: (stats.overview.total_posts || 0).toString(),
       description: '관리자 승인 완료',
       icon: FileText,
-      trend: stats.totalPosts > 0 ? '+' : ''
+      trend: stats.overview.total_posts > 0 ? '+' : ''
     },
     {
       title: '전체 커뮤니티',
-      value: stats.totalCommunities.toString(),
+      value: (stats.overview.total_communities || 0).toString(),
       description: '활성 커뮤니티 수',
       icon: MessageSquare,
-      trend: stats.totalCommunities > 0 ? '+' : ''
+      trend: stats.overview.total_communities > 0 ? '+' : ''
     },
     {
       title: '시스템 상태',
@@ -97,7 +122,37 @@ export default function AdminDashboardPage() {
       icon: Eye,
       trend: '✓'
     }
-  ] : []
+  ] : [
+    // stats가 없는 경우 기본값 표시
+    {
+      title: '전체 사용자',
+      value: '-',
+      description: '데이터 로딩 중',
+      icon: Users,
+      trend: ''
+    },
+    {
+      title: '승인된 게시글',
+      value: '-',
+      description: '데이터 로딩 중',
+      icon: FileText,
+      trend: ''
+    },
+    {
+      title: '전체 커뮤니티',
+      value: '-',
+      description: '데이터 로딩 중',
+      icon: MessageSquare,
+      trend: ''
+    },
+    {
+      title: '시스템 상태',
+      value: '확인 중',
+      description: '상태 확인 중',
+      icon: Eye,
+      trend: '...'
+    }
+  ]
 
   if (loading) {
     return (
@@ -206,20 +261,24 @@ export default function AdminDashboardPage() {
       </Card>
 
       {/* 빠른 작업 */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
-          <CardHeader>
-            <CardTitle className="text-lg">게시글 승인 관리</CardTitle>
-            <CardDescription>대기 중인 게시글 검토 및 승인</CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Link href="/admin/posts/pending">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader>
+              <CardTitle className="text-lg">게시글 승인 관리</CardTitle>
+              <CardDescription>대기 중인 게시글 검토 및 승인</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
-          <CardHeader>
-            <CardTitle className="text-lg">카테고리 관리</CardTitle>
-            <CardDescription>게시글 카테고리 추가 및 관리</CardDescription>
-          </CardHeader>
-        </Card>
+        <Link href="/admin/categories">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader>
+              <CardTitle className="text-lg">카테고리 관리</CardTitle>
+              <CardDescription>게시글 카테고리 추가 및 관리</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         
         <Card className="cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader>
@@ -227,6 +286,18 @@ export default function AdminDashboardPage() {
             <CardDescription>사용자 권한 및 상태 관리</CardDescription>
           </CardHeader>
         </Card>
+        
+        <Link href="/admin/api-test-center">
+          <Card className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-lg text-blue-900 dark:text-blue-100">API 테스트 센터</CardTitle>
+                <CardDescription className="text-blue-700 dark:text-blue-300">시스템 API 종합 테스트 및 진단</CardDescription>
+              </div>
+              <TestTube2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
     </div>
   )

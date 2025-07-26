@@ -1,5 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
+import path from 'path'
+
+// 경로 검증 함수
+function isValidStoragePath(storagePath: string): boolean {
+  // null이나 빈 문자열 체크
+  if (!storagePath || typeof storagePath !== 'string') {
+    return false
+  }
+
+  // 경로 정규화
+  const normalizedPath = path.normalize(storagePath)
+  
+  // 상위 디렉토리 탐색 시도 검증
+  if (normalizedPath.includes('..') || normalizedPath.includes('./')) {
+    return false
+  }
+  
+  // 절대 경로 차단
+  if (path.isAbsolute(normalizedPath)) {
+    return false
+  }
+  
+  // 위험한 문자 패턴 검증
+  const dangerousPatterns = [
+    /\.\.\//g,        // ../
+    /\.\\/g,          // .\
+    /\.\.$/,          // ends with ..
+    /^\.\./, // starts with ..
+    /[<>"|?*\x00-\x1f]/g  // 위험한 문자들
+  ]
+  
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(storagePath)) {
+      return false
+    }
+  }
+  
+  // 허용된 파일 경로 패턴 검증 (community-files/ 하위만 허용)
+  const allowedPrefix = 'community-files/'
+  if (!storagePath.startsWith(allowedPrefix)) {
+    return false
+  }
+  
+  return true
+}
 
 // GET /api/communities/[id]/files/[fileId]/download - 파일 다운로드
 export async function GET(
@@ -51,6 +96,12 @@ export async function GET(
     if (updateError) {
       console.error('다운로드 카운트 업데이트 실패:', updateError)
       // 카운트 업데이트 실패는 다운로드를 막지 않음
+    }
+
+    // 경로 검증
+    if (!isValidStoragePath(fileInfo.storage_path)) {
+      console.error('잘못된 파일 경로:', fileInfo.storage_path)
+      return NextResponse.json({ error: '잘못된 파일 경로입니다' }, { status: 400 })
     }
 
     // Supabase Storage에서 파일 다운로드

@@ -38,7 +38,7 @@ export default function ContactPage() {
       } else {
         alert(result.error || '문의 전송에 실패했습니다.')
       }
-    } catch (error) {
+    } catch {
       // 문의 전송 오류 처리
       alert('문의 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
     } finally {

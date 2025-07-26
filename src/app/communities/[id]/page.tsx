@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { OptimizedAvatar } from '@/components/ui/optimized-image'
 import { 
   useCommunity, 
   useCommunityMessages, 
@@ -55,55 +54,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MemoModal } from '@/components/community/MemoModal'
 import { FileUploadModal } from '@/components/community/FileUploadModal'
+import { CommunityPostList } from '@/components/community/CommunityPostList'
+import { CommunityPostForm } from '@/components/community/CommunityPostForm'
+import { useCommunityPosts, useCreateCommunityPost } from '@/hooks/use-api'
+import { toast } from '@/hooks/use-toast'
 
 // TypeScript 인터페이스
-interface Community {
-  id: string
-  name: string
-  slug: string
-  description: string
-  avatar_url?: string
-  is_public: boolean
-  is_default: boolean
-  member_count: number
-  max_members?: number
-  owner_id: string
-  created_at: string
-  settings: {
-    enable_chat: boolean
-    enable_memos: boolean
-    enable_files: boolean
-  }
-  is_member: boolean
-  user_role: string | null
-  members: Member[]
-  owner: {
-    id: string
-    username: string
-    display_name: string
-    avatar_url: string
-  }
-}
-
-interface Member {
-  id: string
-  username: string
-  display_name?: string
-  avatar_url?: string
-  role: string
-  joined_at: string
-  is_online: boolean
-  is_current_user?: boolean
-}
-
-interface Message {
-  id: string
-  user_id: string
-  username: string
-  content: string
-  created_at: string
-}
-
 interface Memo {
   id: string
   author_id: string
@@ -114,24 +70,6 @@ interface Memo {
   tags: string[]
   created_at: string
   updated_at?: string
-}
-
-interface FileItem {
-  id: string
-  file_name: string
-  file_url: string
-  file_size: number
-  mime_type: string
-  uploaded_by: string
-  uploaded_by_id: string
-  description: string
-  download_count: number
-  created_at: string
-}
-
-interface CurrentUser {
-  id: string
-  username: string
 }
 
 export default function CommunityDetailPage() {
@@ -149,6 +87,7 @@ export default function CommunityDetailPage() {
   const [memoModalOpen, setMemoModalOpen] = useState(false)
   const [fileUploadModalOpen, setFileUploadModalOpen] = useState(false)
   const [selectedMemo, setSelectedMemo] = useState<Memo | null>(null)
+  const [postFormOpen, setPostFormOpen] = useState(false)
 
   // React Query 훅들 사용
   const { data: currentUser } = useCurrentUser()
@@ -160,19 +99,21 @@ export default function CommunityDetailPage() {
   } = useCommunity(id)
   
   const { 
-    data: messagesList = [], 
-    isLoading: messagesLoading 
+    data: messagesList = []
   } = useCommunityMessages(id)
   
   const { 
-    data: memosList = [], 
-    isLoading: memosLoading 
+    data: memosList = []
   } = useCommunityMemos(id)
   
   const { 
-    data: filesList = [], 
-    isLoading: filesLoading 
+    data: filesList = []
   } = useCommunityFiles(id)
+  
+  const { 
+    data: postsList = [],
+    isLoading: postsLoading
+  } = useCommunityPosts(id)
 
   // Mutations
   const sendMessageMutation = useSendMessage()
@@ -180,6 +121,7 @@ export default function CommunityDetailPage() {
   const updateMemoMutation = useUpdateMemo()
   const deleteMemoMutation = useDeleteMemo()
   const uploadFileMutation = useUploadFile()
+  const createPostMutation = useCreateCommunityPost()
 
   const isLoading = communityLoading
   const error = communityError ? (communityError instanceof Error ? communityError.message : '알 수 없는 오류가 발생했습니다') : null
@@ -219,7 +161,7 @@ export default function CommunityDetailPage() {
   }
 
   // 사용자 권한 확인
-  const isOwner = currentUser?.id === community?.owner_id
+  const isOwner = currentUser?.id === community?.created_by
   const isMember = community?.is_member || false
   
   // 실제 멤버 데이터 사용
@@ -235,7 +177,7 @@ export default function CommunityDetailPage() {
         content: messageInput
       })
       setMessageInput('')
-    } catch (error) {
+    } catch {
       // 메시지 전송 실패 처리
       alert('메시지 전송에 실패했습니다')
     }
@@ -263,7 +205,7 @@ export default function CommunityDetailPage() {
       
       setMemoModalOpen(false)
       setSelectedMemo(null)
-    } catch (error) {
+    } catch {
       // 메모 저장 실패 처리
       alert('메모 저장에 실패했습니다')
     }
@@ -277,7 +219,7 @@ export default function CommunityDetailPage() {
         communityId: id,
         memoId
       })
-    } catch (error) {
+    } catch {
       // 메모 삭제 실패 처리
       alert('멤모 삭제에 실패했습니다')
     }
@@ -291,7 +233,7 @@ export default function CommunityDetailPage() {
         description
       })
       setFileUploadModalOpen(false)
-    } catch (error) {
+    } catch {
       // 파일 업로드 실패 처리
       alert('파일 업로드에 실패했습니다')
     }
@@ -299,6 +241,30 @@ export default function CommunityDetailPage() {
 
   const handleFileDownload = async (fileId: string) => {
     window.open(`/api/communities/${id}/files/${fileId}/download`, '_blank')
+  }
+
+  const handlePostSubmit = async (data: {
+    title: string
+    content: string
+  }) => {
+    try {
+      await createPostMutation.mutateAsync({
+        communityId: id,
+        data
+      })
+      
+      setPostFormOpen(false)
+      toast({
+        title: '성공',
+        description: '게시글이 작성되었습니다'
+      })
+    } catch {
+      toast({
+        title: '오류',
+        description: '게시글 작성에 실패했습니다',
+        variant: 'destructive'
+      })
+    }
   }
 
   const handleLeave = () => {
@@ -369,7 +335,7 @@ export default function CommunityDetailPage() {
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={community?.avatar_url || undefined} />
+                <AvatarImage src={community?.icon_url || undefined} />
                 <AvatarFallback className="text-xl">
                   {community?.name?.slice(0, 2).toUpperCase() || 'CO'}
                 </AvatarFallback>
@@ -448,16 +414,20 @@ export default function CommunityDetailPage() {
         {/* 메인 콘텐츠 영역 */}
         <div className="lg:col-span-3">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="chat" disabled={!community?.settings?.enable_chat}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="posts">
+                <FileText className="mr-2 h-4 w-4" />
+                게시판
+              </TabsTrigger>
+              <TabsTrigger value="chat">
                 <MessageCircle className="mr-2 h-4 w-4" />
                 채팅
               </TabsTrigger>
-              <TabsTrigger value="memos" disabled={!community?.settings?.enable_memos}>
+              <TabsTrigger value="memos">
                 <FileText className="mr-2 h-4 w-4" />
                 메모
               </TabsTrigger>
-              <TabsTrigger value="files" disabled={!community?.settings?.enable_files}>
+              <TabsTrigger value="files">
                 <File className="mr-2 h-4 w-4" />
                 파일
               </TabsTrigger>
@@ -622,7 +592,7 @@ export default function CommunityDetailPage() {
                 <div className="grid gap-4">
                   {filesList.filter(file =>
                     file.file_name.toLowerCase().includes(fileSearchQuery.toLowerCase()) ||
-                    file.description.toLowerCase().includes(fileSearchQuery.toLowerCase())
+                    file.description?.toLowerCase().includes(fileSearchQuery.toLowerCase())
                   ).map((file) => (
                     <Card key={file.id}>
                       <CardContent className="flex items-center justify-between p-4">
@@ -662,6 +632,16 @@ export default function CommunityDetailPage() {
                 </div>
               </div>
             </TabsContent>
+
+            {/* 게시판 탭 */}
+            <TabsContent value="posts" className="mt-4">
+              <CommunityPostList
+                communityId={id}
+                posts={postsList}
+                isLoading={postsLoading}
+                onCreatePost={() => setPostFormOpen(true)}
+              />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -683,6 +663,19 @@ export default function CommunityDetailPage() {
         onOpenChange={setFileUploadModalOpen}
         onUpload={handleFileUpload}
       />
+
+      {/* 게시글 작성 모달 */}
+      {postFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl px-4">
+            <CommunityPostForm
+              onSubmit={handlePostSubmit}
+              onCancel={() => setPostFormOpen(false)}
+              isSubmitting={createPostMutation.isPending}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

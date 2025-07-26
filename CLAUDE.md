@@ -10,16 +10,22 @@
 ## 🚀 완성된 핵심 기능
 
 ### 📝 게시글 시스템 (완료)
-- 작성/수정/삭제, 좋아요, 댓글 시스템
-- 관리자 승인 워크플로우 (draft→pending→published/rejected)
-- 카테고리별 분류 및 검색
-- 마크다운 에디터 지원
+- **지식 공유** (`/knowledge`): 개발 지식, 관리자 승인 워크플로우
+- **자유게시판** (`/forum`): 일상/취업/회고, 즉시 게시
+- **통합 글쓰기** (`/write`): 게시판 선택하여 작성
+- **기능**: 작성/수정/삭제, 좋아요, 댓글, 카테고리별 분류
 
 ### 👥 커뮤니티 시스템 (완료)
-- 공개/비공개 커뮤니티 생성 (4-5명 규모)
+- 소규모 커뮤니티 (4-5명 규모) 생성 및 관리
 - 실시간 채팅 (Supabase Realtime)
 - 메모 공유 (마크다운 지원)
 - 파일 업로드/다운로드 (Supabase Storage)
+- 공개/비공개 설정 가능
+
+### 🔍 통합 기능 (완료)
+- **통합 검색** (`/search`): 지식공유/자유게시판 통합 검색
+- 실시간 검색 (2자 이상), 탭 필터링, 페이지네이션
+- 반응형 디자인 (모바일 최적화)
 
 ### 🔒 인증 시스템 (완료)
 - Supabase Auth 기반 로그인/회원가입
@@ -27,9 +33,9 @@
 - 역할 기반 접근 제어 (RBAC)
 
 ### 👑 관리자 시스템 (완료)
-- 게시글 승인/거부 대시보드
+- 게시글 승인/거부 워크플로우 (draft→pending→published/rejected)
 - 카테고리 관리
-- 통계 및 사용자 관리
+- 사용자 활동 통계 대시보드
 
 ## 🏗️ 기술 스택
 ```yaml
@@ -45,15 +51,19 @@ Quality: ESLint + TypeScript 엄격 모드
 ```
 src/
 ├── app/                    # Next.js App Router
-│   ├── page.tsx           # 🏠 메인 페이지 (게시글 피드)
+│   ├── page.tsx           # 🏠 메인 페이지 (지식공유 피드)
 │   ├── auth/              # 🔐 로그인/회원가입
-│   ├── posts/             # 📝 게시글 CRUD, 카테고리
+│   ├── knowledge/         # 📚 지식 공유 (승인 필요)
+│   ├── forum/             # 💬 자유게시판 (즉시 게시)
+│   ├── write/             # ✍️ 통합 글쓰기
+│   ├── search/            # 🔍 통합 검색
 │   ├── communities/       # 👥 커뮤니티 + 채팅/메모/파일
 │   ├── admin/             # 👑 관리자 대시보드
-│   └── api/               # 🔌 API 엔드포인트 (28개)
+│   └── api/               # 🔌 API 엔드포인트 (40개+)
 ├── components/            # 🧩 UI 컴포넌트 (26개)
 │   ├── ui/               # 기본 UI (버튼, 카드, 폼 등)
-│   └── community/        # 커뮤니티 전용 (모달, 채팅 등)
+│   ├── community/        # 커뮤니티 전용 (모달, 채팅 등)
+│   └── board/            # 게시판 전용 컴포넌트
 ├── hooks/                 # 🎣 React Query API 훅
 ├── lib/                   # 🛠️ Supabase 설정, 유틸리티
 └── types/                 # 📋 TypeScript 타입 정의
@@ -68,7 +78,8 @@ profiles              # 사용자 프로필 + 역할
 
 -- 게시글 시스템  
 categories            # 카테고리 관리
-posts                # 게시글 (승인 상태 관리)
+posts                # 지식공유 (승인 상태 관리)
+free_posts           # 자유게시판 (즉시 게시)
 post_comments        # 댓글 (대댓글 지원)
 post_likes          # 좋아요 시스템
 
@@ -89,17 +100,18 @@ tags                # 태그 시스템
 - 관리자 전용 기능 보호
 - 파일 업로드/다운로드 권한 검증
 
-## 🔌 API 엔드포인트 (28개)
+## 🔌 API 엔드포인트 (40개+)
 
-### 주요 API
+### 주요 API 카테고리
 ```yaml
-인증: POST /api/auth/logout
-게시글: CRUD /api/posts/*, 좋아요, 댓글
+인증: POST /api/auth/logout, GET /api/auth/me
+지식공유: CRUD /api/posts/*, 좋아요, 댓글, 검색
+자유게시판: CRUD /api/free-posts/*, 좋아요, 댓글, 검색
 커뮤니티: CRUD /api/communities/*, 채팅, 메모, 파일
-관리자: /api/admin/*, 승인, 통계
-카테고리: /api/categories, /api/admin/categories
-태그: /api/tags
-통계: /api/stats
+관리자: /api/admin/*, 승인, 통계, 카테고리 관리
+카테고리: /api/categories, /api/categories/[boardId]
+태그: /api/tags, /api/tags/popular
+통계: /api/stats, /api/admin/stats
 ```
 
 ## 🧪 테스트 & 품질
@@ -145,7 +157,7 @@ npm run build && npm run lint && npx playwright test
 
 ### ✅ 완성도 100%
 - 프론트엔드 UI/UX 완료
-- 백엔드 API 28개 완료
+- 백엔드 API 40개+ 완료
 - 데이터베이스 설계 완료
 - 실시간 기능 완료
 - 보안 정책 완료
@@ -168,25 +180,29 @@ npm run build && npm run lint && npx playwright test
 ## 📋 주요 페이지
 
 ### 사용자 페이지
-- `/` - 메인 페이지 (게시글 피드)
-- `/auth/login` - 로그인
-- `/auth/signup` - 회원가입
-- `/posts` - 게시글 목록
-- `/posts/[id]` - 게시글 상세
-- `/posts/write` - 게시글 작성
-- `/communities` - 커뮤니티 목록
-- `/communities/[id]` - 커뮤니티 상세 (채팅/메모/파일)
+- **`/`** - 메인 페이지 (지식공유 피드)
+- **`/knowledge`** - 지식공유 목록
+- **`/knowledge/[id]`** - 지식공유 상세
+- **`/forum`** - 자유게시판 목록
+- **`/forum/[id]`** - 자유게시판 상세
+- **`/write`** - 통합 글쓰기 (게시판 선택)
+- **`/search`** - 통합 검색 페이지
+- **`/communities`** - 커뮤니티 목록
+- **`/communities/[id]`** - 커뮤니티 상세 (채팅/메모/파일)
+- **`/auth/login`** - 로그인
+- **`/auth/signup`** - 회원가입
 
 ### 관리자 페이지
-- `/admin` - 관리자 대시보드
-- `/admin/posts/pending` - 게시글 승인 관리
-- `/admin/categories` - 카테고리 관리
+- **`/admin`** - 관리자 대시보드
+- **`/admin/posts/pending`** - 게시글 승인 관리
+- **`/admin/categories`** - 카테고리 관리
 
 ## 🔄 데이터 흐름
 
 ### 게시글 승인 플로우
 ```
-작성 → draft → pending → (관리자 검토) → published/rejected
+지식공유: 작성 → draft → pending → (관리자 검토) → published/rejected
+자유게시판: 작성 → 즉시 published
 ```
 
 ### 커뮤니티 참여 플로우
@@ -194,9 +210,9 @@ npm run build && npm run lint && npx playwright test
 목록 조회 → 커뮤니티 선택 → 참여 → 채팅/메모/파일 공유
 ```
 
-### 인증 플로우
+### 검색 플로우
 ```
-회원가입/로그인 → 세션 생성 → 페이지 접근 권한 확인 → 컨텐츠 접근
+검색어 입력 → 통합 검색 페이지 → 필터 선택 → 결과 표시
 ```
 
 ## 🚨 문제 해결

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { PostStatus } from '@/types/post'
+import { rateLimit, sanitizeInput, validateUUID, requireAuth } from '@/lib/security'
 
 interface Params {
   id: string
@@ -10,8 +12,20 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -37,7 +51,7 @@ export async function GET(
       }
     )
 
-    // 게시글 조회
+    // 게시글 조회 (denormalized author fields 포함)
     const { data: post, error } = await supabase
       .from('posts')
       .select(`
@@ -46,21 +60,31 @@ export async function GET(
         content,
         excerpt,
         status,
+        board_type_id,
         created_at,
         updated_at,
         view_count,
         like_count,
         category_id,
         author_id,
-        post_categories (
+        author_username,
+        author_display_name,
+        author_avatar_url,
+        tags,
+        is_featured,
+        is_pinned,
+        board_types (
           id,
           name,
-          slug
+          slug,
+          icon,
+          requires_approval
         ),
-        profiles!posts_author_id_fkey (
+        categories (
           id,
-          username,
-          display_name
+          name,
+          slug,
+          color
         )
       `)
       .eq('id', id)
@@ -83,7 +107,7 @@ export async function GET(
     // 승인된 게시글이거나 작성자 본인인지 확인
     const { data: { session } } = await supabase.auth.getSession()
     
-    if (post.status !== 'approved' && (!session || session.user.id !== post.author_id)) {
+    if (post.status !== 'published' && (!session || session.user.id !== post.author_id)) {
       // 관리자 권한 확인
       if (session) {
         const { data: profile } = await supabase
@@ -106,8 +130,8 @@ export async function GET(
       }
     }
 
-    // 조회수 증가 (승인된 게시글만)
-    if (post.status === 'approved') {
+    // 조회수 증가 (공개된 게시글만)
+    if (post.status === 'published') {
       await supabase
         .from('posts')
         .update({ view_count: post.view_count + 1 })
@@ -116,7 +140,28 @@ export async function GET(
       post.view_count = post.view_count + 1
     }
 
-    return NextResponse.json({ post })
+    // 작성자 정보 형식 맞추기 (denormalized fields 사용)
+    const author = post.author_id ? {
+      id: post.author_id,
+      username: post.author_username || 'Unknown',
+      display_name: post.author_display_name || post.author_username || 'Unknown',
+      avatar_url: post.author_avatar_url
+    } : null
+
+    // board_type 정보 추가
+    const boardType = post.board_types || null
+    
+    // 응답 형식 유지
+    return NextResponse.json({
+      post: {
+        ...post,
+        author,
+        board_type: boardType,
+        category: post.categories,
+        categories: undefined,
+        board_types: undefined
+      }
+    })
   } catch (error) {
     console.error('게시글 조회 예외:', error)
     return NextResponse.json(
@@ -130,8 +175,20 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -206,36 +263,52 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { title, content, excerpt, category_id, status } = body
+    const { title, content, excerpt, board_type_id, category_id, status, tags } = body
 
     // 필수 필드 검증
-    if (!title || !content || !category_id) {
+    if (!title || !content || !board_type_id || !category_id) {
       return NextResponse.json(
-        { error: '제목, 내용, 카테고리는 필수입니다.' },
+        { error: '제목, 내용, 게시판, 카테고리는 필수입니다.' },
         { status: 400 }
       )
     }
+
+    // UUID validation
+    if (!validateUUID(board_type_id) || !validateUUID(category_id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 ID 형식입니다.' },
+        { status: 400 }
+      )
+    }
+
+    // Input sanitization
+    const sanitizedTitle = sanitizeInput(title)
+    const sanitizedContent = sanitizeInput(content)
+    const sanitizedExcerpt = excerpt ? sanitizeInput(excerpt) : sanitizedContent.substring(0, 200)
 
     // 업데이트할 데이터 준비
     const updateData: {
       title: string
       content: string
       excerpt: string
+      board_type_id: string
       category_id: string
       tags?: string[]
-      status?: string
+      status?: PostStatus
       updated_at: string
     } = {
-      title,
-      content,
-      excerpt: excerpt || content.substring(0, 200),
+      title: sanitizedTitle.trim(),
+      content: sanitizedContent.trim(),
+      excerpt: sanitizedExcerpt.trim(),
+      board_type_id,
       category_id,
+      tags: Array.isArray(tags) ? tags.filter(Boolean) : [],
       updated_at: new Date().toISOString()
     }
 
     // 관리자만 상태 변경 가능
-    if (isAdmin && status && ['pending', 'approved', 'rejected'].includes(status)) {
-      updateData.status = status
+    if (isAdmin && status && ['draft', 'published', 'pending', 'rejected'].includes(status)) {
+      updateData.status = status as PostStatus
     }
 
     // 게시글 업데이트
@@ -249,6 +322,7 @@ export async function PUT(
         content,
         excerpt,
         status,
+        board_type_id,
         created_at,
         updated_at,
         view_count,
@@ -280,8 +354,20 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<Params> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     const cookieStore = await cookies()
     const supabase = createServerClient(

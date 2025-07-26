@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, validateUUID, sanitizeInput } from '@/lib/security'
 
 // GET /api/communities/[id]/files - 커뮤니티 파일 목록 조회
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -30,6 +35,14 @@ export async function GET(
       }
     )
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     // 인증 확인
     const { data: { session } } = await supabase.auth.getSession()
@@ -108,6 +121,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -131,6 +148,15 @@ export async function POST(
       }
     )
     const { id } = await params
+    
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     const description = formData.get('description') as string
@@ -156,9 +182,13 @@ export async function POST(
       return NextResponse.json({ error: '유효한 파일명이 필요합니다' }, { status: 400 })
     }
 
-    // 설명 길이 제한
-    if (description && description.length > 500) {
-      return NextResponse.json({ error: '설명은 500자를 초과할 수 없습니다' }, { status: 400 })
+    // 설명 길이 제한 및 sanitization
+    let sanitizedDescription = ''
+    if (description) {
+      if (description.length > 500) {
+        return NextResponse.json({ error: '설명은 500자를 초과할 수 없습니다' }, { status: 400 })
+      }
+      sanitizedDescription = sanitizeInput(description)
     }
 
     // 커뮤니티 멤버십 확인
@@ -213,7 +243,7 @@ export async function POST(
         file_url: publicUrl,
         file_size: file.size,
         mime_type: file.type || 'application/octet-stream',
-        description: description?.trim() || '',
+        description: sanitizedDescription.trim() || '',
         download_count: 0,
         storage_path: storagePath,
         created_at: new Date().toISOString()

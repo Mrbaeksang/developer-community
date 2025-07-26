@@ -2,10 +2,9 @@
  * 기본 API 클라이언트와 React Query 설정
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { ERROR_MESSAGES } from '@/lib/constants/app'
-import type { ApiResponse } from '@/types/common'
 
 // 기본 API 클라이언트
 class ApiClient {
@@ -37,7 +36,32 @@ class ApiClient {
         throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
       }
 
-      return response.json()
+      const data = await response.json()
+      
+      // Handle nested response structure for post detail endpoint
+      if (endpoint.match(/^\/posts\/[^\/]+$/) && data.post) {
+        return data.post as T
+      }
+      
+      // Handle comments endpoint response - check for both data.comments and direct array
+      if (endpoint.includes('/comments')) {
+        // For GET requests, extract comments array from response
+        if (options.method === undefined || options.method === 'GET') {
+          if (data.comments && Array.isArray(data.comments)) {
+            return data.comments as T
+          }
+          // If data is directly an array (fallback)
+          if (Array.isArray(data)) {
+            return data as T
+          }
+        }
+        // For POST requests, return the single comment
+        if (options.method === 'POST' && data.comment) {
+          return data.comment as T
+        }
+      }
+      
+      return data
     } catch (error) {
       if (error instanceof TypeError) {
         throw new Error(ERROR_MESSAGES.NETWORK_ERROR)
@@ -68,9 +92,10 @@ class ApiClient {
     })
   }
 
-  delete<T>(endpoint: string) {
+  delete<T>(endpoint: string, options?: { data?: Record<string, unknown> }) {
     return this.request<T>(endpoint, {
       method: 'DELETE',
+      body: options?.data ? JSON.stringify(options.data) : undefined,
     })
   }
 }

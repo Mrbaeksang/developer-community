@@ -13,8 +13,8 @@ import type {
   CommunityMemo,
   CommunityFile,
   CreateMemoInput,
-  SendMessageInput,
-  UploadFileInput
+  CommunityPost,
+  CreateCommunityPostInput
 } from '@/types/community'
 
 // Query Keys
@@ -199,6 +199,31 @@ export function useUploadFile() {
       queryClient.setQueryData(
         communityQueryKeys.files(communityId),
         (old: CommunityFile[] = []) => [uploadedFile, ...old]
+      )
+    },
+  })
+}
+
+// 커뮤니티 게시글 목록 조회
+export function useCommunityPosts(communityId: string) {
+  return useQuery({
+    queryKey: ['communities', communityId, 'posts'],
+    queryFn: () => apiClient.get<{ posts: CommunityPost[] }>(`/communities/${communityId}/posts`).then(r => r.posts),
+    enabled: !!communityId,
+  })
+}
+
+// 커뮤니티 게시글 작성
+export function useCreateCommunityPost() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: ({ communityId, data }: { communityId: string; data: CreateCommunityPostInput }) =>
+      apiClient.post<{ post: CommunityPost }>(`/communities/${communityId}/posts`, data),
+    onSuccess: ({ post }, { communityId }) => {
+      queryClient.setQueryData(
+        ['communities', communityId, 'posts'],
+        (old: CommunityPost[] = []) => [post, ...old]
       )
     },
   })

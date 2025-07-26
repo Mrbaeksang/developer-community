@@ -28,7 +28,9 @@ export {
   useCreateMemo,
   useUpdateMemo,
   useDeleteMemo,
-  useUploadFile
+  useUploadFile,
+  useCommunityPosts,
+  useCreateCommunityPost
 } from './api/communities'
 
 // 게시글 관련 API 훅들

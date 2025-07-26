@@ -35,6 +35,7 @@ export default function SignupPage() {
 
     try {
       // 회원가입 시도
+      console.log('회원가입 시도:', { email, username, displayName })
       
       // 회원가입
       const { data, error } = await supabase.auth.signUp({
@@ -49,31 +50,33 @@ export default function SignupPage() {
       })
 
       // Supabase 응답 처리
+      console.log('회원가입 응답:', { data, error })
 
-      if (error) throw error
-
-      if (data.user) {
-        // 사용자 생성 완료
-        // 프로필 생성 (이미 트리거에서 처리되지만 추가 정보 업데이트)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            username,
-            display_name: displayName
-          })
-          .eq('id', data.user.id)
-
-        if (profileError) {
-          // 프로필 업데이트 에러 처리
-        }
+      if (error) {
+        console.error('회원가입 에러:', error)
+        throw error
       }
 
-      router.push('/auth/login?message=회원가입이 완료되었습니다.')
+      if (data.user) {
+        console.log('사용자 생성 완료:', data.user.id)
+        
+        // 트리거가 프로필을 자동 생성하므로 별도 확인 불필요
+        // 바로 로그인 페이지로 이동
+        console.log('회원가입 성공, 로그인 페이지로 이동')
+        setIsLoading(false)  // 로딩 상태 해제
+        router.push('/auth/login?message=회원가입이 완료되었습니다.')
+      } else {
+        // 사용자가 생성되지 않은 경우
+        console.error('사용자가 생성되지 않았습니다')
+        setIsLoading(false)  // 로딩 상태 해제 추가!
+        throw new Error('사용자 생성에 실패했습니다.')
+      }
     } catch (err: unknown) {
       // 회원가입 에러 처리
+      console.error('회원가입 실패:', err)
       setError(err instanceof Error ? err.message : '회원가입에 실패했습니다.')
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   return (
@@ -137,7 +140,7 @@ export default function SignupPage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                최소 8자, 대문자, 소문자, 숫자 포함
+                최소 6자 이상
               </p>
             </div>
             <div className="space-y-2">

@@ -31,7 +31,6 @@ interface PerformanceMetrics {
 // 성능 모니터링 훅
 export function usePerformanceMonitoring() {
   const [metrics, setMetrics] = useState<PerformanceMetrics>({})
-  const observerRef = useRef<PerformanceObserver | null>(null)
 
   const measureMetrics = useCallback(() => {
     const newMetrics: PerformanceMetrics = {}
@@ -79,7 +78,7 @@ export function usePerformanceMonitoring() {
           setMetrics(prev => ({ ...prev, lcp: lastEntry.startTime }))
         })
         lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] })
-      } catch (e) {
+      } catch {
         console.warn('LCP measurement not supported')
       }
 
@@ -94,7 +93,7 @@ export function usePerformanceMonitoring() {
           })
         })
         fidObserver.observe({ entryTypes: ['first-input'] })
-      } catch (e) {
+      } catch {
         console.warn('FID measurement not supported')
       }
 
@@ -113,7 +112,7 @@ export function usePerformanceMonitoring() {
           })
         })
         clsObserver.observe({ entryTypes: ['layout-shift'] })
-      } catch (e) {
+      } catch {
         console.warn('CLS measurement not supported')
       }
 
@@ -128,19 +127,13 @@ export function usePerformanceMonitoring() {
           })
         })
         fcpObserver.observe({ entryTypes: ['paint'] })
-      } catch (e) {
+      } catch {
         console.warn('FCP measurement not supported')
       }
     }
 
     // 초기 메트릭 측정
     measureMetrics()
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-    }
   }, [measureMetrics])
 
   // 성능 등급 계산

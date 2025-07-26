@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit, requireAdmin } from '@/lib/security'
 
 // GET: 관리자용 게시글 통계 조회
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
   try {
     const supabase = await createClient()
 
-    // 인증 확인
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
-    }
-
     // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
-    }
+    const adminCheck = await requireAdmin(request, supabase)
+    if (adminCheck) return adminCheck
 
     // 오늘 날짜 (한국 시간 기준)
     const today = new Date()
@@ -52,7 +43,7 @@ export async function GET() {
       supabase
         .from('posts')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'approved'),
+        .eq('status', 'published'),
       
       // 거부된 게시글 수
       supabase
@@ -64,7 +55,7 @@ export async function GET() {
       supabase
         .from('posts')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'approved')
+        .eq('status', 'published')
         .gte('updated_at', todayStart)
         .lt('updated_at', todayEnd),
       

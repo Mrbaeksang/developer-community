@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, requireAdmin } from '@/lib/security'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -26,65 +30,81 @@ export async function GET() {
       }
     )
 
-    // 사용자 인증 확인
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    // 관리자 권한 확인 - 새로운 시그니처 사용
+    const adminResult = await requireAdmin(request)
+    if (adminResult instanceof NextResponse) {
+      return adminResult
     }
+    
+    // adminResult에서 supabase와 user 추출
+    const { user } = adminResult
+    console.log('활동 로그 조회 - 관리자:', user?.id)
 
-    // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
-
-    // 최근 관리자 활동 로그 조회 (프로필 정보와 함께)
+    // admin_logs 테이블에서 활동 로그 조회
     const { data: activities, error } = await supabase
       .from('admin_logs')
       .select(`
         id,
+        admin_id,
         action,
         target_type,
         target_id,
         details,
-        created_at,
-        admin_profiles:profiles!admin_logs_admin_id_fkey (
-          username,
-          display_name
-        )
+        created_at
       `)
       .order('created_at', { ascending: false })
       .limit(10)
 
     if (error) {
       console.error('활동 로그 조회 에러:', error)
+      // RLS 에러인 경우 빈 배열 반환
+      if (error.code === '42501' || error.message?.includes('permission')) {
+        console.log('RLS 정책으로 인한 접근 제한, 빈 배열 반환')
+        return NextResponse.json([])
+      }
       return NextResponse.json({ error: '활동 로그 조회에 실패했습니다.' }, { status: 500 })
     }
 
-    // 응답 형식 가공 
-    const formattedActivities = activities?.map((activity: Record<string, unknown>) => ({
-      id: activity.id as string,
-      type: (activity.target_type as string) || 'system',
-      user: (() => {
-        const profiles = activity.admin_profiles as { display_name?: string; username?: string } | null
-        return profiles?.display_name || profiles?.username || 'System'
-      })(),
-      action: activity.action as string,
-      target: activity.details ? 
-        (typeof activity.details === 'object' && activity.details !== null && 'title' in activity.details 
-          ? (activity.details as { title: string }).title 
-          : JSON.stringify(activity.details)
-        ) : 
-        ((activity.target_id as string) || '시스템 작업'),
-      time: formatTimeAgo(activity.created_at as string)
-    })) || []
+    // 관리자 프로필 정보 조회
+    const adminIds = [...new Set(activities?.map(a => a.admin_id).filter(Boolean) || [])]
+    let profileMap = new Map()
+    
+    if (adminIds.length > 0) {
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id, username, display_name')
+        .in('id', adminIds)
+      
+      profileMap = new Map(adminProfiles?.map(p => [p.id, p]) || [])
+    }
 
-    return NextResponse.json(formattedActivities)
+    // admin_logs가 비어있는 경우 처리
+    if (!activities || activities.length === 0) {
+      console.log('활동 로그가 비어있음')
+      return NextResponse.json([])
+    }
+
+    // 응답 형식 가공
+    const formattedActivities = activities.map((log) => {
+      const adminProfile = profileMap.get(log.admin_id)
+      const adminName = adminProfile?.display_name || adminProfile?.username || '관리자'
+      
+      // details에서 추가 정보 추출
+      const details = log.details || {}
+      const targetName = details.target_name || log.target_id || '대상'
+      
+      return {
+        id: log.id,
+        type: log.target_type || 'system',
+        user: adminName,
+        action: log.action,
+        target: targetName,
+        time: formatTimeAgo(log.created_at)
+      }
+    })
+
+    // 항상 배열을 반환하도록 보장
+    return NextResponse.json(formattedActivities || [])
   } catch (error) {
     console.error('활동 로그 API 예외:', error)
     return NextResponse.json(

@@ -150,7 +150,7 @@ export function useDeleteAccount() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (password: string) => apiClient.delete('/auth/account'),
+    mutationFn: (password: string) => apiClient.delete('/auth/account', { data: { password } }),
     onSuccess: () => {
       // 모든 캐시 클리어
       queryClient.clear()

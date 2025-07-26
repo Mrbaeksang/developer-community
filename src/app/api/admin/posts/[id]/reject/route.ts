@@ -1,33 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit, validateUUID, sanitizeInput, requireAdmin } from '@/lib/security'
 
 // POST: 게시글 거부
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const supabase = await createClient()
 
-    // 인증 확인
+    // 관리자 권한 확인
+    const adminCheck = await requireAdmin(request, supabase)
+    if (adminCheck) return adminCheck
+
+    // 세션 가져오기 (로그용)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) {
       return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
     }
 
-    // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
-    }
-
     const { id } = await params
     const postId = id
+
+    // UUID validation
+    if (!validateUUID(postId)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 게시글 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     const { reason } = body
 
@@ -35,6 +42,9 @@ export async function POST(
     if (!reason?.trim()) {
       return NextResponse.json({ error: '거부 사유는 필수입니다' }, { status: 400 })
     }
+
+    // Input sanitization
+    const sanitizedReason = sanitizeInput(reason)
 
     // 게시글 존재 및 상태 확인
     const { data: post, error: postError } = await supabase
@@ -79,7 +89,7 @@ export async function POST(
         details: {
           post_title: post.title,
           author_id: post.author_id,
-          rejection_reason: reason.trim()
+          rejection_reason: sanitizedReason.trim()
         }
       })
 

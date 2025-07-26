@@ -1,8 +1,16 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit } from '@/lib/security'
+import { 
+  executeWithRLSHandling,
+  handleRLSError 
+} from '@/lib/supabase/rls-error-handler'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -28,44 +36,62 @@ export async function GET() {
       }
     )
 
-    // 병렬로 모든 통계 조회
+    // 병렬로 모든 통계 조회 - RLS 에러 처리 포함
     const [
       usersResult,
       postsResult,
       communitiesResult
     ] = await Promise.all([
       // 전체 회원 수
-      supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true }),
+      executeWithRLSHandling(
+        () => supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true }),
+        {
+          context: '전체 회원 수 조회',
+          fallbackData: { count: 0 }
+        }
+      ),
       
       // 승인된 게시글 수
-      supabase
-        .from('posts')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'approved'),
+      executeWithRLSHandling(
+        () => supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'published'),
+        {
+          context: '게시된 게시글 수 조회',
+          fallbackData: { count: 0 }
+        }
+      ),
       
       // 전체 커뮤니티 수
-      supabase
-        .from('communities')
-        .select('id', { count: 'exact', head: true })
+      executeWithRLSHandling(
+        () => supabase
+          .from('communities')
+          .select('id', { count: 'exact', head: true }),
+        {
+          context: '전체 커뮤니티 수 조회',
+          fallbackData: { count: 0 }
+        }
+      )
     ])
 
-    // 에러 체크
-    if (usersResult.error) {
+    // 에러 체크 (RLS 에러가 아닌 경우만 로그)
+    if (usersResult.error && !usersResult.isRLSError) {
       console.error('회원 수 조회 에러:', usersResult.error)
     }
-    if (postsResult.error) {
+    if (postsResult.error && !postsResult.isRLSError) {
       console.error('게시글 수 조회 에러:', postsResult.error)
     }
-    if (communitiesResult.error) {
+    if (communitiesResult.error && !communitiesResult.isRLSError) {
       console.error('커뮤니티 수 조회 에러:', communitiesResult.error)
     }
 
     const stats = {
-      totalUsers: usersResult.count || 0,
-      totalPosts: postsResult.count || 0,
-      totalCommunities: communitiesResult.count || 0
+      totalUsers: usersResult.data?.count || 0,
+      totalPosts: postsResult.data?.count || 0,
+      totalCommunities: communitiesResult.data?.count || 0
     }
 
     return NextResponse.json(stats)

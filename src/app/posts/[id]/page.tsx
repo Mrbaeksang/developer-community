@@ -3,14 +3,16 @@
 import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
-import { PostCardSkeleton } from '@/components/ui/skeleton'
 import { OptimizedAvatar } from '@/components/ui/optimized-image'
 import { useCurrentUser, usePost, usePostComments, useLikePost, useAddComment } from '@/hooks/use-api'
+import { sanitizeAndFormatContent } from '@/lib/sanitize'
+import type { Post, Comment } from '@/types/post'
+import type { User } from '@/types/auth'
 import { 
   ArrowLeft, 
   Eye, 
@@ -31,50 +33,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-// 타입 정의
-interface Category {
-  id: string
-  name: string
-  slug: string
-  color: string
-}
-
-interface Author {
-  id: string
-  username: string
-  avatar_url: string | null
-  bio?: string
-}
-
-interface Post {
-  id: string
-  title: string
-  content: string
-  excerpt: string
-  author: Author
-  category: Category
-  status: string
-  view_count: number
-  like_count: number
-  comment_count: number
-  is_liked: boolean
-  tags: string[]
-  created_at: string
-  updated_at: string
-}
-
-interface Comment {
-  id: string
-  post_id: string
-  author: Author
-  content: string
-  created_at: string
-}
-
 
 export default function PostDetailPage() {
   const router = useRouter()
@@ -86,7 +46,7 @@ export default function PostDetailPage() {
   // React Query 훅들 사용
   const { data: currentUser } = useCurrentUser()
   const { data: post, isLoading: postLoading, error: postError } = usePost(id)
-  const { data: comments = [], isLoading: commentsLoading } = usePostComments(id)
+  const { data: comments = [] } = usePostComments(id)
   
   // Mutations
   const likePostMutation = useLikePost()
@@ -151,7 +111,7 @@ export default function PostDetailPage() {
     }
   }
 
-  const isAuthor = currentUser && post && currentUser.id === post.author.id
+  const isAuthor = currentUser && post && post.author && currentUser.id === post.author.id
 
   // 로딩 상태 - 스켈레톤 사용
   if (postLoading) {
@@ -298,22 +258,24 @@ export default function PostDetailPage() {
           <CardHeader>
             {/* 카테고리 및 작성일 */}
             <div className="flex items-center gap-3 mb-4">
-              <Badge 
-                variant="secondary"
-                style={{ 
-                  backgroundColor: `${post.category.color}20`, 
-                  color: post.category.color 
-                }}
-              >
-                {post.category.name}
-              </Badge>
+              {post.category && (
+                <Badge 
+                  variant="secondary"
+                  style={{ 
+                    backgroundColor: post.category.color ? `${post.category.color}20` : '#f1f5f920', 
+                    color: post.category.color || '#64748b' 
+                  }}
+                >
+                  {post.category.name}
+                </Badge>
+              )}
               <span className="text-sm text-muted-foreground flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" />
-                {new Date(post.created_at).toLocaleDateString('ko-KR')}
+                {post.created_at ? new Date(post.created_at).toLocaleDateString('ko-KR') : ''}
               </span>
               <span className="text-sm text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
-                {Math.ceil(post.content.length / 500)}분 읽기
+                {Math.ceil((post.content?.length || 0) / 500)}분 읽기
               </span>
             </div>
 
@@ -324,13 +286,13 @@ export default function PostDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <OptimizedAvatar 
-                  src={post.author.avatar_url}
-                  alt={post.author.username || post.author.full_name || ''}
+                  src={post.author?.avatar_url || undefined}
+                  alt={post.author?.username || post.author?.display_name || ''}
                   size="md"
                 />
                 <div>
-                  <p className="font-medium">{post.author.full_name || post.author.username}</p>
-                  <p className="text-sm text-muted-foreground">{post.author.role}</p>
+                  <p className="font-medium">{post.author?.display_name || post.author?.username || 'Unknown'}</p>
+                  <p className="text-sm text-muted-foreground">user</p>
                 </div>
               </div>
 
@@ -371,11 +333,11 @@ export default function PostDetailPage() {
           {/* 본문 내용 */}
           <CardContent className="py-8">
             <div className="prose prose-sm max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: post.content.replace(/\n/g, '<br />') }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizeAndFormatContent(post.content || '') }} />
             </div>
 
             {/* 태그 */}
-            {post.tags.length > 0 && (
+            {post.tags && post.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-8">
                 {post.tags.map(tag => (
                   <Badge key={tag} variant="outline">
@@ -393,7 +355,7 @@ export default function PostDetailPage() {
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Eye className="h-4 w-4" />
-                {post.view_count.toLocaleString()}
+                {(post.view_count || 0).toLocaleString()}
               </span>
               <button 
                 onClick={handleLike}
@@ -402,7 +364,7 @@ export default function PostDetailPage() {
                 }`}
               >
                 <Heart className={`h-4 w-4 ${post.is_liked ? 'fill-current' : ''}`} />
-                {post.like_count}
+                {post.like_count || 0}
               </button>
               <span className="flex items-center gap-1">
                 <MessageCircle className="h-4 w-4" />
@@ -463,15 +425,15 @@ export default function PostDetailPage() {
                 comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     <OptimizedAvatar 
-                      src={comment.author.avatar_url}
-                      alt={comment.author.username || comment.author.full_name || ''}
+                      src={comment.author?.avatar_url || undefined}
+                      alt={comment.author?.username || comment.author?.display_name || ''}
                       size="sm"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{comment.author.username}</span>
+                        <span className="font-medium text-sm">{comment.author?.username || 'Unknown'}</span>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(comment.created_at).toLocaleDateString('ko-KR')}
+                          {comment.created_at ? new Date(comment.created_at).toLocaleDateString('ko-KR') : ''}
                         </span>
                       </div>
                       <p className="text-sm">{comment.content}</p>

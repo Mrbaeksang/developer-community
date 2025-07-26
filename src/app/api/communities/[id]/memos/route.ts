@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit, validateUUID, sanitizeInput } from '@/lib/security'
 
 // GET /api/communities/[id]/memos - 커뮤니티 메모 조회
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -31,6 +36,14 @@ export async function GET(
     )
     
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
 
     // 인증 확인
     const { data: { session } } = await supabase.auth.getSession()
@@ -61,11 +74,7 @@ export async function GET(
         tags,
         created_at,
         updated_at,
-        author_id,
-        profiles:author_id (
-          username,
-          display_name
-        )
+        author_id
       `)
       .eq('community_id', id)
       .order('is_pinned', { ascending: false })
@@ -76,27 +85,27 @@ export async function GET(
       return NextResponse.json({ error: '메모를 불러올 수 없습니다' }, { status: 500 })
     }
 
+    // profiles에서 사용자 정보 조회
+    const authorIds = [...new Set(memos.map(m => m.author_id))]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name')
+      .in('id', authorIds)
+
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+
     // 응답 형식 변환
-    const formattedMemos = memos.map(memo => {
-      const memoWithProfiles = memo as typeof memo & {
-        profiles?: {
-          username: string
-          display_name: string
-        }
-      }
-      
-      return {
-        id: memo.id,
-        author_id: memo.author_id,
-        author: memoWithProfiles.profiles?.username || 'Unknown',
-        title: memo.title,
-        content: memo.content,
-        is_pinned: memo.is_pinned,
-        tags: memo.tags || [],
-        created_at: memo.created_at,
-        updated_at: memo.updated_at
-      }
-    })
+    const formattedMemos = memos.map(memo => ({
+      id: memo.id,
+      author_id: memo.author_id,
+      author: profileMap.get(memo.author_id)?.username || 'Unknown',
+      title: memo.title,
+      content: memo.content,
+      is_pinned: memo.is_pinned,
+      tags: memo.tags || [],
+      created_at: memo.created_at,
+      updated_at: memo.updated_at
+    }))
 
     return NextResponse.json(formattedMemos)
   } catch (error) {
@@ -110,6 +119,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting
+  const rateLimitResult = await rateLimit(request)
+  if (rateLimitResult) return rateLimitResult
+
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -134,6 +147,15 @@ export async function POST(
     )
     
     const { id } = await params
+
+    // UUID validation
+    if (!validateUUID(id)) {
+      return NextResponse.json(
+        { error: '유효하지 않은 커뮤니티 ID입니다.' },
+        { status: 400 }
+      )
+    }
+
     const { title, content, tags, is_pinned } = await request.json()
 
     // 인증 확인
@@ -158,6 +180,10 @@ export async function POST(
     if (content.trim().length > 10000) {
       return NextResponse.json({ error: '내용은 10,000자를 초과할 수 없습니다' }, { status: 400 })
     }
+
+    // Input sanitization
+    const sanitizedTitle = sanitizeInput(title)
+    const sanitizedContent = sanitizeInput(content)
 
     // 커뮤니티 멤버십 확인
     const { data: membership } = await supabase
@@ -184,9 +210,9 @@ export async function POST(
       .insert({
         community_id: id,
         author_id: session.user.id,
-        title: title.trim(),
-        content: content.trim(),
-        tags: Array.isArray(tags) ? tags.filter(tag => tag.trim()) : [],
+        title: sanitizedTitle.trim(),
+        content: sanitizedContent.trim(),
+        tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [],
         is_pinned: Boolean(is_pinned),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

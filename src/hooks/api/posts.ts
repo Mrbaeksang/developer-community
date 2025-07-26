@@ -1,5 +1,15 @@
 /**
  * 게시글 관련 API 훅들
+ * 
+ * 🚨 AI 주의사항 - 데이터베이스 구조:
+ * - ❌ free_posts 전용 훅 없음! 이름에 속지 마세요!
+ * - ✅ 모든 게시글은 동일한 API 훅 사용
+ * - 📌 API 엔드포인트:
+ *   - /api/posts → 지식공유 및 일반 게시글
+ *   - /api/free-posts → 자유게시판 (내부적으로 posts 테이블 사용)
+ * 
+ * ⚠️ 주의: useFreePost 같은 별도 훅 없음!
+ * 필요시 filters에 boardTypeId 포함하여 구분
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -10,8 +20,7 @@ import type {
   PostFilters,
   CreatePostInput,
   UpdatePostInput,
-  Comment,
-  CreateCommentInput 
+  Comment
 } from '@/types/post'
 
 // Query Keys

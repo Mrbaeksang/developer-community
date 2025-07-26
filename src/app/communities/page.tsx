@@ -9,36 +9,16 @@ import { Input } from '@/components/ui/input'
 import { PostCardSkeleton } from '@/components/ui/skeleton'
 import { OptimizedAvatar } from '@/components/ui/optimized-image'
 import { useCommunities } from '@/hooks/use-api'
-import { useDebouncedSearch } from '@/hooks/use-debounced-search'
 import { 
   Search, 
   Plus, 
   Users, 
   Lock, 
   Globe,
-  MessageCircle,
-  FileText,
   Calendar,
   ChevronRight,
-  Loader2,
   AlertCircle
 } from 'lucide-react'
-
-interface Community {
-  id: string
-  name: string
-  slug: string
-  description: string
-  avatar_url?: string
-  is_public: boolean
-  is_default: boolean
-  member_count: number
-  max_members?: number
-  owner?: { id: string; username: string }
-  created_at: string
-  tags?: string[]
-  is_member?: boolean
-}
 
 export default function CommunitiesPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -54,11 +34,8 @@ export default function CommunitiesPage() {
 
   const communities = communitiesData || []
 
-  // 전체 커뮤니티와 프라이빗 커뮤니티 분리
-  const allCommunity = communities.find(c => c.is_default)
-  const privateCommunities = communities.filter(c => !c.is_default)
-
-  const filteredCommunities = privateCommunities.filter(community => {
+  // 커뮤니티 필터링
+  const filteredCommunities = communities.filter(community => {
     const matchesSearch = community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          community.description.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesFilter = !showOnlyMyCommunities || community.is_member
@@ -160,55 +137,6 @@ export default function CommunitiesPage() {
         </div>
       </div>
 
-      {/* 전체 커뮤니티 */}
-      {allCommunity && (
-        <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-4">공개 커뮤니티</h2>
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <OptimizedAvatar
-                    src={allCommunity.avatar_url}
-                    alt={allCommunity.name}
-                    size="lg"
-                    fallbackInitial="🌐"
-                    className="bg-primary text-primary-foreground"
-                  />
-                  <div>
-                    <CardTitle className="text-xl flex items-center gap-2">
-                      {allCommunity.name}
-                      <Badge variant="secondary">기본</Badge>
-                    </CardTitle>
-                    <CardDescription>{allCommunity.description}</CardDescription>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  {allCommunity.member_count.toLocaleString()}명
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  {new Date(allCommunity.created_at).toLocaleDateString('ko-KR')} 생성
-                </span>
-              </div>
-            </CardContent>
-            <CardFooter className="flex items-center justify-between">
-              <div />
-              <Button asChild>
-                <Link href={`/communities/${allCommunity.id}`}>
-                  입장하기
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        </section>
-      )}
 
       {/* 프라이빗 커뮤니티 목록 */}
       <section>
@@ -216,20 +144,20 @@ export default function CommunitiesPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredCommunities.map((community) => {
             const isMember = community.is_member || false
-            const isFull = community.max_members ? community.member_count >= community.max_members : false
+            const isFull = community.max_members ? (community.member_count || 0) >= community.max_members : false
 
             return (
               <Card key={community.id} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <OptimizedAvatar
-                      src={community.avatar_url}
+                      src={community.icon_url || undefined}
                       alt={community.name}
                       size="md"
                       fallbackInitial={community.name.slice(0, 2).toUpperCase()}
                     />
                     <div className="flex items-center gap-1">
-                      {community.is_public ? (
+                      {community.visibility === 'public' ? (
                         <Globe className="h-4 w-4 text-muted-foreground" />
                       ) : (
                         <Lock className="h-4 w-4 text-muted-foreground" />
@@ -260,11 +188,11 @@ export default function CommunitiesPage() {
                         입장하기
                       </Link>
                     </Button>
-                  ) : community.is_public && !isFull ? (
+                  ) : community.visibility === 'public' && !isFull ? (
                     <Button className="w-full" variant="outline">
                       가입 신청
                     </Button>
-                  ) : !community.is_public ? (
+                  ) : community.visibility !== 'public' ? (
                     <Button className="w-full" variant="secondary" disabled>
                       초대 전용
                     </Button>

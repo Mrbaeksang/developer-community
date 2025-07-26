@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>쿠키 초기화</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .cookies-list {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>개발자 커뮤니티 - 쿠키 초기화</h1>
+    <p>로그인 문제를 해결하기 위해 모든 쿠키를 삭제합니다.</p>
+    
+    <div id="current-cookies" class="cookies-list"></div>
+    
+    <button onclick="clearAllCookies()">모든 쿠키 삭제</button>
+    <button onclick="window.location.href='/'">메인으로 돌아가기</button>
+    
+    <div id="result"></div>
+    
+    <script>
+    // 현재 쿠키 표시
+    function showCurrentCookies() {
+        const cookies = document.cookie.split(';').filter(c => c.trim());
+        const cookieDiv = document.getElementById('current-cookies');
+        
+        if (cookies.length === 0 || (cookies.length === 1 && !cookies[0])) {
+            cookieDiv.innerHTML = '<strong>현재 쿠키:</strong><br>쿠키가 없습니다.';
+        } else {
+            cookieDiv.innerHTML = '<strong>현재 쿠키 (' + cookies.length + '개):</strong><br>' + 
+                cookies.map(c => c.trim()).join('<br>');
+        }
+    }
+    
+    function clearAllCookies() {
+        // 현재 쿠키 가져오기
+        const cookies = document.cookie.split(';');
+        let deletedCount = 0;
+        
+        // 각 쿠키 삭제
+        for (let cookie of cookies) {
+            const eqPos = cookie.indexOf('=');
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+            
+            if (name) {
+                // 모든 가능한 경로와 도메인 조합으로 삭제
+                document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;';
+                document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + window.location.hostname + ';';
+                document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.' + window.location.hostname + ';';
+                document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+                
+                // Supabase 특별 처리
+                if (name.startsWith('sb-')) {
+                    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=localhost;';
+                }
+                
+                deletedCount++;
+            }
+        }
+        
+        // localStorage도 정리
+        try {
+            localStorage.clear();
+            sessionStorage.clear();
+        } catch (e) {
+            console.error('Storage clear error:', e);
+        }
+        
+        document.getElementById('result').innerHTML = 
+            '<div class="result success">' +
+            '✅ ' + deletedCount + '개의 쿠키가 삭제되었습니다.<br>' +
+            'localStorage와 sessionStorage도 초기화되었습니다.<br>' +
+            '3초 후 메인 페이지로 이동합니다...' +
+            '</div>';
+        
+        // 쿠키 상태 업데이트
+        setTimeout(showCurrentCookies, 100);
+        
+        // 3초 후 메인 페이지로 이동
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 3000);
+    }
+    
+    // 페이지 로드 시 현재 쿠키 표시
+    showCurrentCookies();
+    </script>
+</body>
+</html>

@@ -53,6 +53,8 @@ export function OptimizedImage({
     if (fallbackSrc && currentSrc !== fallbackSrc) {
       setCurrentSrc(fallbackSrc)
       setIsLoading(true)
+    } else if (onError) {
+      onError()
     }
   }
 
@@ -101,7 +103,7 @@ export function OptimizedImage({
   }
 
   if (fill) {
-    return <Image {...imageProps} fill />
+    return <Image {...imageProps} fill alt={alt} />
   }
 
   return (
@@ -109,6 +111,7 @@ export function OptimizedImage({
       {...imageProps}
       width={width}
       height={height}
+      alt={alt}
     />
   )
 }
